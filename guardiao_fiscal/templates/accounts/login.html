@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row justify-content-center align-items-center" style="min-height: 80vh;">
+    <div class="col-md-4">
+        <div class="card shadow border-0">
+            <div class="card-body p-5">
+                <div class="text-center mb-4">
+                    <i class="bi bi-shield-lock-fill text-primary" style="font-size: 3rem;"></i>
+                    <h3 class="fw-bold text-primary mt-2">Guardião Fiscal</h3>
+                    <p class="text-muted">Acesse sua conta para gerenciar notas</p>
+                </div>
+
+                <form method="post">
+                    {% csrf_token %}
+                    
+                    {% if form.errors %}
+                        <div class="alert alert-danger small p-2">
+                            Usuário ou senha incorretos.
+                        </div>
+                    {% endif %}
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small">Usuário</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light border-end-0"><i class="bi bi-person"></i></span>
+                            <input type="text" name="username" class="form-control border-start-0 ps-0" placeholder="Seu usuário" required>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between">
+                            <label class="form-label fw-bold small">Senha</label>
+                            <a href="{% url 'reset_password' %}" class="small text-decoration-none">Esqueceu a senha?</a>
+                        </div>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light border-end-0"><i class="bi bi-key"></i></span>
+                            <input type="password" name="password" class="form-control border-start-0 ps-0" placeholder="********" required>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary w-100 py-2 shadow-sm fw-bold">
+                        Entrar <i class="bi bi-box-arrow-in-right ms-1"></i>
+                    </button>
+                </form>
+
+                <hr class="my-4 text-muted opacity-25">
+
+                <div class="text-center">
+                    <p class="mb-0 text-muted">Ainda não tem conta?</p>
+                    <a href="{% url 'registro' %}" class="fw-bold text-decoration-none">Crie seu cadastro aqui</a>
+                </div>
+            </div>
+        </div>
+        <p class="text-center mt-4 text-muted small">&copy; 2026 Guardião Fiscal - SaaS</p>
+    </div>
+</div>
+{% endblock %}

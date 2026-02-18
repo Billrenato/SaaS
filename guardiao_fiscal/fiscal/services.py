@@ -15,7 +15,7 @@ from .models import NotaFiscal
 logger = logging.getLogger(__name__)
 
 def apenas_numeros(valor):
-    """Garante que CNPJs sejam comparados apenas como números."""
+    
     return re.sub(r'\D', '', str(valor))
 
 def processar_lote(upload_lote):
@@ -125,3 +125,6 @@ def ler_xml(xml_bytes, empresa):
         print(f"[INFO] Nota {numero} ({tipo_nota.upper()}) salva com sucesso.")
     except Exception as e:
         logger.error(f"Erro ao salvar nota {chave}: {e}")
+
+
+
