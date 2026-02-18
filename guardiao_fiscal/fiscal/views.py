@@ -5,11 +5,12 @@ from .models import UploadLote, NotaFiscal
 from .services import processar_lote
 from django.db.models import Sum
 
+
 @login_required
 def upload_xml(request):
     if request.method == "POST":
         arquivo = request.FILES.get("arquivo")
-        
+
         if not arquivo:
             messages.error(request, "Por favor, selecione um arquivo.")
             return render(request, "fiscal/upload.html")
@@ -18,16 +19,27 @@ def upload_xml(request):
             empresa=request.user.empresa,
             arquivo=arquivo
         )
-        
-        try:
-            processar_lote(lote)
-            messages.success(request, f"Lote processado com sucesso!")
-        except Exception as e:
-            messages.error(request, f"Erro ao processar lote: {e}")
-        
+
+        resultado = processar_lote(lote)
+
+        if resultado["salvas"] == 0:
+            messages.error(request, "Nenhuma nota foi importada.")
+        else:
+            messages.success(request, f"{resultado['salvas']} notas importadas com sucesso.")
+
+        if resultado["cnpj_invalido"] > 0:
+            messages.warning(request, f"{resultado['cnpj_invalido']} XML ignorados (CNPJ diferente da empresa).")
+
+        if resultado["duplicadas"] > 0:
+            messages.warning(request, f"{resultado['duplicadas']} XML duplicados.")
+
+        if resultado["xml_invalido"] > 0:
+            messages.warning(request, f"{resultado['xml_invalido']} XML inválidos.")
+
         return redirect("listar_notas")
 
     return render(request, "fiscal/upload.html")
+
 
 @login_required
 def listar_notas(request):
