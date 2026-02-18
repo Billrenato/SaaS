@@ -1,11 +1,6 @@
 from django.db import models
 from accounts.models import Empresa
 
-# Create your models here.
-
-from django.db import models
-from accounts.models import Empresa
-
 
 class NotaFiscal(models.Model):
 
@@ -36,9 +31,10 @@ class NotaFiscal(models.Model):
         return f"{self.numero} - {self.tipo}"
 
 
-
-
 class UploadLote(models.Model):
     empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE)
     criado_em = models.DateTimeField(auto_now_add=True)
     arquivo = models.FileField(upload_to="uploads/")
+
+    def __str__(self):
+        return f"Lote {self.id} - {self.empresa}"

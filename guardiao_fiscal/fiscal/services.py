@@ -1,98 +1,127 @@
 import zipfile
 import rarfile
-import os
+import py7zr  # Importação necessária para o seu arquivo .7z
 import xml.etree.ElementTree as ET
+import logging
+import os
+import shutil
+import tempfile
+import re
 from datetime import datetime
 from decimal import Decimal
+from django.db import transaction
 from .models import NotaFiscal
 
+logger = logging.getLogger(__name__)
+
+def apenas_numeros(valor):
+    """Garante que CNPJs sejam comparados apenas como números."""
+    return re.sub(r'\D', '', str(valor))
 
 def processar_lote(upload_lote):
     caminho = upload_lote.arquivo.path
-    pasta_temp = os.path.dirname(caminho)
+    empresa = upload_lote.empresa
+    
+    # Criamos uma pasta temporária para garantir a leitura de subpastas e formatos complexos
+    pasta_temp = tempfile.mkdtemp()
 
-    arquivos_xml = []
+    try:
+        # 1. Extração baseada na extensão
+        if caminho.lower().endswith(".7z"):
+            with py7zr.SevenZipFile(caminho, mode='r') as archive:
+                archive.extractall(path=pasta_temp)
+        
+        elif caminho.lower().endswith(".zip"):
+            with zipfile.ZipFile(caminho, 'r') as zip_ref:
+                zip_ref.extractall(path=pasta_temp)
 
-    # CASO 1: XML DIRETO
-    if caminho.lower().endswith(".xml"):
-        arquivos_xml.append(caminho)
+        elif caminho.lower().endswith(".rar"):
+            with rarfile.RarFile(caminho) as rar_ref:
+                rar_ref.extractall(path=pasta_temp)
 
-    # CASO 2: ZIP
-    elif caminho.lower().endswith(".zip"):
-        with zipfile.ZipFile(caminho, 'r') as zip_ref:
-            zip_ref.extractall(pasta_temp)
+        # 2. Varredura recursiva (entra em todas as subpastas)
+        for raiz, _, arquivos in os.walk(pasta_temp):
+            for nome in arquivos:
+                if nome.lower().endswith(".xml"):
+                    caminho_xml = os.path.join(raiz, nome)
+                    with open(caminho_xml, 'rb') as f:
+                        ler_xml(f.read(), empresa)
 
-    # CASO 3: RAR
-    elif caminho.lower().endswith(".rar"):
-        with rarfile.RarFile(caminho) as rar_ref:
-            rar_ref.extractall(pasta_temp)
+    except Exception as e:
+        logger.error(f"Erro ao processar lote {upload_lote.id}: {e}")
+    finally:
+        # 3. Limpeza obrigatória da pasta temporária
+        shutil.rmtree(pasta_temp)
 
-    # 🔎 PROCURA XML RECURSIVAMENTE
-    for raiz, pastas, arquivos in os.walk(pasta_temp):
-        for arquivo in arquivos:
-            if arquivo.lower().endswith(".xml"):
-                caminho_xml = os.path.join(raiz, arquivo)
-                arquivos_xml.append(caminho_xml)
-
-    print("XML encontrados:", arquivos_xml)
-
-    for caminho_xml in arquivos_xml:
-        ler_xml(caminho_xml, upload_lote.empresa)
-
-def ler_xml(caminho_xml, empresa):
-    tree = ET.parse(caminho_xml)
-    root = tree.getroot()
-
-    def buscar(tag):
-        return root.find(f".//{{*}}{tag}")
-
-    chave_tag = buscar("infNFe")
-    numero = buscar("nNF")
-    data = buscar("dhEmi")
-    valor = buscar("vNF")
-
-    cnpj_emit = buscar("CNPJ")
-    cnpj_dest = root.find(".//{*}dest/{*}CNPJ")
-
-    icms = buscar("vICMS")
-    ipi = buscar("vIPI")
-    pis = buscar("vPIS")
-    cofins = buscar("vCOFINS")
-    tributos = buscar("vTotTrib")
-
-    if not (chave_tag is not None and numero is not None and data is not None and valor is not None):
-        print("Campos obrigatórios ausentes:", caminho_xml)
+@transaction.atomic
+def ler_xml(xml_bytes, empresa):
+    try:
+        root = ET.fromstring(xml_bytes)
+    except Exception as e:
+        logger.error(f"Erro ao parsear XML: {e}")
         return
 
-    chave = chave_tag.attrib.get("Id", "").replace("NFe", "")
+    ns = {'ns': 'http://www.portalfiscal.inf.br/nfe'}
 
-    # -------- TIPO --------
-    modelo = buscar("mod")
-    if modelo is not None and modelo.text == "65":
-        tipo = "nfce"
-    else:
-        if cnpj_emit is not None and cnpj_emit.text == empresa.cnpj:
-            tipo = "saida"
-        else:
-            tipo = "entrada"
+    # Localiza a tag principal infNFe (funciona para nfeProc ou NFe)
+    infNFe = root.find(".//ns:infNFe", ns)
+    if infNFe is None:
+        return
 
+    ide = root.find(".//ns:ide", ns)
+    if ide is None:
+        return
+
+    # Dados básicos
+    numero = ide.find("ns:nNF", ns).text
+    modelo = ide.find("ns:mod", ns).text
+    data_str = ide.find("ns:dhEmi", ns).text
+    chave = infNFe.attrib.get("Id", "").replace("NFe", "")
+
+    # Evita duplicidade
     if NotaFiscal.objects.filter(chave=chave).exists():
         return
 
-    NotaFiscal.objects.create(
-        empresa=empresa,
-        chave=chave,
-        numero=numero.text,
-        data_emissao=datetime.fromisoformat(data.text.replace("Z", "")),
-        valor_total=Decimal(valor.text),
+    # --- LÓGICA DE TIPO (Entrada, Saída, NFC-e) ---
+    emit = root.find(".//ns:emit", ns)
+    cnpj_emitente = apenas_numeros(emit.find("ns:CNPJ", ns).text) if emit is not None else ""
+    cnpj_minha_empresa = apenas_numeros(empresa.cnpj)
 
-        valor_icms=Decimal(icms.text) if icms is not None else 0,
-        valor_ipi=Decimal(ipi.text) if ipi is not None else 0,
-        valor_pis=Decimal(pis.text) if pis is not None else 0,
-        valor_cofins=Decimal(cofins.text) if cofins is not None else 0,
-        valor_tributos=Decimal(tributos.text) if tributos is not None else 0,
+    if modelo == "65":
+        tipo_nota = "nfce"
+    else:
+        # Se o CNPJ do emitente no XML for o meu, eu vendi (Saída). 
+        # Se for diferente, eu comprei (Entrada).
+        tipo_nota = "saida" if cnpj_emitente == cnpj_minha_empresa else "entrada"
 
-        tipo=tipo
-    )
+    # --- FINANCEIRO ---
+    icms_tot = root.find(".//ns:ICMSTot", ns)
+    
+    def get_decimal(tag):
+        if icms_tot is None: return Decimal("0.00")
+        el = icms_tot.find(f"ns:{tag}", ns)
+        try:
+            return Decimal(el.text) if el is not None else Decimal("0.00")
+        except:
+            return Decimal("0.00")
 
-    print("Nota salva:", chave)
+    # --- SALVAMENTO ---
+    try:
+        data_emissao = datetime.fromisoformat(data_str.replace("Z", ""))
+        
+        NotaFiscal.objects.create(
+            empresa=empresa,
+            chave=chave,
+            numero=numero,
+            data_emissao=data_emissao,
+            valor_total=get_decimal("vNF"),
+            valor_icms=get_decimal("vICMS"),
+            valor_ipi=get_decimal("vIPI"),
+            valor_pis=get_decimal("vPIS"),
+            valor_cofins=get_decimal("vCOFINS"),
+            valor_tributos=get_decimal("vTotTrib"),
+            tipo=tipo_nota
+        )
+        print(f"[INFO] Nota {numero} ({tipo_nota.upper()}) salva com sucesso.")
+    except Exception as e:
+        logger.error(f"Erro ao salvar nota {chave}: {e}")
