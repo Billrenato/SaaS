@@ -1,0 +1,22 @@
+<h1>Notas Fiscais</h1>
+
+<table border="1">
+  <tr>
+    <th>Número</th>
+    <th>Data</th>
+    <th>Valor</th>
+    <th>Tipo</th>
+  </tr>
+  {% for nota in notas %}
+  <tr>
+    <td>{{ nota.numero }}</td>
+    <td>{{ nota.data_emissao }}</td>
+    <td>{{ nota.valor_total }}</td>
+    <td>{{ nota.tipo }}</td>
+  </tr>
+  {% empty %}
+  <tr>
+    <td colspan="4">Nenhuma nota encontrada</td>
+  </tr>
+  {% endfor %}
+</table>
