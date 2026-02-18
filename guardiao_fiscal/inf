@@ -6,3 +6,8 @@ python manage.py runserver
 
 python manage.py createsuperuser
 
+
+git push origin main
+
+git pull origin main
+
