@@ -27,7 +27,7 @@ DEBUG = True
 
 ALLOWED_HOSTS = []
 
-AUTH_USER_MODEL = 'accounts.User'
+#AUTH_USER_MODEL = 'accounts.User'
 
 # Application definition
 
@@ -124,7 +124,7 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalization
 # https://docs.djangoproject.com/en/5.2/topics/i18n/
 
-LANGUAGE_CODE = 'en-us'
+LANGUAGE_CODE = 'pt-br'
 
 TIME_ZONE = 'UTC'
 
@@ -142,3 +142,13 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+
+# Para onde o usuário vai logo após logar
+LOGIN_REDIRECT_URL = 'dashboard_relatorios'  # Ou 'listar_notas', use o name da sua URL
+
+# Para onde o usuário vai quando ele tenta acessar algo restrito sem estar logado
+LOGIN_URL = 'login'
+
+# Para onde o usuário vai após fazer logout
+LOGOUT_REDIRECT_URL = 'login'

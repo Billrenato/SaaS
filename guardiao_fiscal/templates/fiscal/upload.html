@@ -1,26 +1,109 @@
 {% extends "base.html" %}
 
 {% block content %}
+<div class="row justify-content-center align-items-center mb-5" style="min-height: 80vh;">
+    <div class="col-md-8 col-lg-6">
+        
+        {% if messages %}
+            {% for message in messages %}
+                <div class="alert alert-{{ message.tags }} alert-dismissible fade show shadow-sm mb-4" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
 
-<div class="container mt-4">
-    <h2 class="mb-4">Upload de Lote XML</h2>
+        <div class="card shadow border-0">
+            <div class="card-body p-4 p-md-5">
+                <div class="text-center mb-4">
+                    <div class="icon-shape bg-light-primary text-primary rounded-circle mb-3" style="width: 60px; height: 60px; display: inline-flex; align-items: center; justify-content: center; background-color: #eef2ff;">
+                        <i class="bi bi-cloud-arrow-up-fill fs-2"></i>
+                    </div>
+                    <h3 class="fw-bold text-primary mb-1">Upload de Lote</h3>
+                    <p class="text-muted small">Envie seus arquivos XML compactados em formato .ZIP</p>
+                </div>
 
-    <form method="post" enctype="multipart/form-data">
-        {% csrf_token %}
+                <form method="post" enctype="multipart/form-data" id="uploadForm">
+                    {% csrf_token %}
 
-        <div class="mb-3">
-            <label class="form-label">Arquivo XML</label>
-            <input type="file" name="arquivo" class="form-control" required>
+                    <div class="upload-container mb-4">
+                        <label for="arquivo" class="drop-zone w-100 border border-2 border-dashed rounded-3 p-5 text-center bg-light cursor-pointer d-block" id="dropZone">
+                            <i class="bi bi-file-earmark-zip fs-1 text-muted mb-3 d-block"></i>
+                            <span class="d-block fw-bold text-secondary">Arraste seu arquivo .ZIP aqui</span>
+                            <span class="text-muted small">ou clique para selecionar do computador</span>
+                            <input type="file" name="arquivo" id="arquivo" class="d-none" accept=".zip,.7z" required>
+                        </label>
+                        <div id="file-name" class="mt-2 text-primary small fw-bold text-center" style="display: none;"></div>
+                    </div>
+
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-primary py-2 fw-bold shadow-sm">
+                            <i class="bi bi-rocket-takeoff-fill me-2"></i>Processar Arquivos
+                        </button>
+                        <a href="{% url 'listar_notas' %}" class="btn btn-link text-muted text-decoration-none small">
+                            <i class="bi bi-arrow-left me-1"></i>Voltar para a listagem
+                        </a>
+                    </div>
+                </form>
+            </div>
         </div>
-
-        <button type="submit" class="btn btn-success">
-            Enviar
-        </button>
-
-        <a href="{% url 'listar_notas' %}" class="btn btn-secondary">
-            Voltar
-        </a>
-    </form>
+    </div>
 </div>
 
+<style>
+    .drop-zone {
+        transition: all 0.3s ease;
+        border-color: #dee2e6 !important;
+        cursor: pointer;
+    }
+    .drop-zone:hover, .drop-zone.dragover {
+        border-color: #0d6efd !important;
+        background-color: #f8f9fa !important;
+        transform: scale(1.01);
+    }
+    .cursor-pointer { cursor: pointer; }
+</style>
+
+<script>
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('arquivo');
+    const fileNameDisplay = document.getElementById('file-name');
+
+    // Destacar ao arrastar sobre
+    ['dragover', 'dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, e => {
+            e.preventDefault();
+            e.stopPropagation();
+        });
+    });
+
+    dropZone.addEventListener('dragover', () => dropZone.classList.add('dragover'));
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+
+    dropZone.addEventListener('drop', (e) => {
+        dropZone.classList.remove('dragover');
+        const files = e.dataTransfer.files;
+        if (files.length) {
+            fileInput.files = files;
+            updateFileName(files[0].name);
+        }
+    });
+
+    fileInput.addEventListener('change', () => {
+        if (fileInput.files.length) {
+            updateFileName(fileInput.files[0].name);
+        }
+    });
+
+    function updateFileName(name) {
+        if (!name.toLowerCase().endsWith('.zip') && !name.toLowerCase().endsWith('.7z')) {
+            alert('Apenas arquivos .ZIP ou .7Z são permitidos!');
+            fileInput.value = '';
+            fileNameDisplay.style.display = 'none';
+            return;
+        }
+        fileNameDisplay.textContent = "Selecionado: " + name;
+        fileNameDisplay.style.display = 'block';
+    }
+</script>
 {% endblock %}
