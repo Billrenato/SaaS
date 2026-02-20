@@ -30,6 +30,24 @@ class NotaFiscal(models.Model):
     def __str__(self):
         return f"{self.numero} - {self.tipo}"
 
+class NotaFiscalCFOP(models.Model):
+    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE)
+    nota = models.ForeignKey(NotaFiscal, on_delete=models.CASCADE, related_name="cfops")
+
+    cfop = models.CharField(max_length=10)
+    descricao = models.CharField(max_length=255, blank=True, null=True)
+
+    valor = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["empresa", "cfop"]),
+        ]
+
+    def __str__(self):
+        return f"{self.cfop} - {self.valor}"
 
 class UploadLote(models.Model):
     empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE)

@@ -65,31 +65,44 @@ def listar_notas(request):
 
 from django.db.models import Q # Importante para busca OU
 
+import json
+from django.shortcuts import render
+from django.contrib.auth.decorators import login_required
+from django.db.models import Sum, Q
+from django.db.models.functions import TruncMonth
+from .models import NotaFiscal
+# Importe as funções que criamos no services.py
+from .services import obter_metricas_dashboard 
+
 @login_required
 def dashboard_relatorios(request):
     empresa = request.user.empresa
-    notas = NotaFiscal.objects.filter(empresa=empresa)
-
+    
     # --- Captura dos Filtros do GET ---
     tipo = request.GET.get('tipo')
-    ano = request.GET.get('ano')
     search = request.GET.get('search')
+    data_inicio = request.GET.get('data_inicio') # Novo
+    data_fim = request.GET.get('data_fim')       # Novo
+
+    # --- Base de Notas (QuerySet) ---
+    notas = NotaFiscal.objects.filter(empresa=empresa)
 
     # --- Aplicação dos Filtros ---
     if tipo:
         notas = notas.filter(tipo=tipo)
     
-    if ano:
-        # Garante que o ano seja um número para o filtro de data
-        notas = notas.filter(data_emissao__year=ano)
+    if data_inicio:
+        notas = notas.filter(data_emissao__date__gte=data_inicio)
+    
+    if data_fim:
+        notas = notas.filter(data_emissao__date__lte=data_fim)
         
     if search:
-        # O uso do Q permite buscar em múltiplos campos com "OU"
         notas = notas.filter(
             Q(chave__icontains=search) | Q(numero__icontains=search)
         )
 
-    # --- Lógica do Gráfico (Reflete os filtros acima) ---
+    # --- Gráfico de Evolução Mensal (Mantido) ---
     evolucao = notas.annotate(mes=TruncMonth('data_emissao')) \
         .values('mes') \
         .annotate(total=Sum('valor_total')) \
@@ -98,18 +111,55 @@ def dashboard_relatorios(request):
     labels_evolucao = [d['mes'].strftime('%b/%Y') for d in evolucao]
     valores_evolucao = [float(d['total']) for d in evolucao]
 
-    # --- Cálculo do Valor Total (Baseado no Filtro Atual) ---
-    valor_total_filtrado = notas.aggregate(total=Sum('valor_total'))['total'] or 0
+    # --- NOVAS MÉTRICAS (CFOP, Impostos e Alertas) ---
+    # Chamamos o service passando os filtros atuais para sincronizar os gráficos
+    metricas = obter_metricas_dashboard(
+        empresa, 
+        data_inicio=data_inicio, 
+        data_fim=data_fim, 
+        tipo_nota=tipo
+    )
+
+    # Preparação para Gráfico de CFOP
+    labels_cfop = [c['cfop'] for c in metricas['cfops']]
+    valores_cfop = [float(c['total']) for c in metricas['cfops']]
+
+    # Preparação para Gráfico de Impostos (Pizza/Rosca)
+    t = metricas['totais']
+    labels_impostos = ['ICMS', 'IPI', 'PIS', 'COFINS']
+    valores_impostos = [
+        float(t['total_icms'] or 0),
+        float(t['total_ipi'] or 0),
+        float(t['total_pis'] or 0),
+        float(t['total_cofins'] or 0)
+    ]
+
+    
 
     context = {
+        # Gráficos
         'labels_evolucao': json.dumps(labels_evolucao),
         'valores_evolucao': json.dumps(valores_evolucao),
-        'mes_atual_valor': valor_total_filtrado,
-        'total_notas': notas.count(),
+        'labels_cfop': json.dumps(labels_cfop),
+        'valores_cfop': json.dumps(valores_cfop),
+        'labels_impostos': json.dumps(labels_impostos),
+        'valores_impostos': json.dumps(valores_impostos),
+        
+        # Cards e Totais
+        'mes_atual_valor': t['total_vendas'] or 0,
+        'total_notas': t['quantidade'] or 0,
+        
+        # Filtros (para persistir nos inputs da tela)
         'filter_tipo': tipo,
         'filter_search': search,
-        'alertas': verificar_alertas(empresa)
+        'filter_data_inicio': data_inicio,
+        'filter_data_fim': data_fim,
+        
+        # Alertas e Auditoria
+        'furos': metricas['furos'],
+        'ultima_importacao': metricas['ultima_importacao'],
     }
+    
     return render(request, "fiscal/relatorios.html", context)
 
 def verificar_alertas(empresa):
