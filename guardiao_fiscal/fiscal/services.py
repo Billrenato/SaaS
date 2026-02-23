@@ -28,20 +28,30 @@ def processar_lote(upload_lote):
         "cnpj_invalido": 0,
         "duplicadas": 0,
         "xml_invalido": 0,
+        "nao_autorizada": 0,
         "total": 0,
     }
 
     try:
-        # EXTRAÇÃO (Mantido conforme seu original)
+        # EXTRAÇÃO
         if caminho.lower().endswith(".7z"):
             with py7zr.SevenZipFile(caminho, mode='r') as archive:
                 archive.extractall(path=pasta_temp)
+
         elif caminho.lower().endswith(".zip"):
             with zipfile.ZipFile(caminho, 'r') as zip_ref:
                 zip_ref.extractall(path=pasta_temp)
+
         elif caminho.lower().endswith(".rar"):
             with rarfile.RarFile(caminho) as rar_ref:
                 rar_ref.extractall(path=pasta_temp)
+
+        elif caminho.lower().endswith(".xml"):
+            shutil.copy(caminho, pasta_temp)
+
+        elif os.path.isdir(caminho):
+            shutil.copytree(caminho, pasta_temp, dirs_exist_ok=True)
+
         else:
             raise Exception("Formato de arquivo não suportado.")
 
@@ -51,21 +61,22 @@ def processar_lote(upload_lote):
                 if nome.lower().endswith(".xml"):
                     resultado["total"] += 1
                     caminho_xml = os.path.join(raiz, nome)
+
                     try:
                         with open(caminho_xml, 'rb') as f:
                             status = ler_xml(f.read(), empresa)
-                        if status == "salva":
+
+                        if status in resultado:
+                            resultado[status] += 1
+                        elif status == "salva":
                             resultado["salvas"] += 1
-                        elif status == "cnpj_invalido":
-                            resultado["cnpj_invalido"] += 1
-                        elif status == "duplicada":
-                            resultado["duplicadas"] += 1
-                        elif status == "xml_invalido":
-                            resultado["xml_invalido"] += 1
+
                     except Exception as e:
                         logger.error(f"Erro no XML {nome}: {e}")
                         resultado["xml_invalido"] += 1
+
         return resultado
+
     finally:
         shutil.rmtree(pasta_temp)
 
@@ -77,6 +88,7 @@ def ler_xml(xml_bytes, empresa):
         return "xml_invalido"
 
     ns = {'ns': 'http://www.portalfiscal.inf.br/nfe'}
+
     infNFe = root.find(".//ns:infNFe", ns)
     ide = root.find(".//ns:ide", ns)
 
@@ -91,10 +103,29 @@ def ler_xml(xml_bytes, empresa):
     if NotaFiscal.objects.filter(chave=chave).exists():
         return "duplicada"
 
+    # 🔥 VERIFICA AUTORIZAÇÃO
+    prot = root.find(".//ns:protNFe/ns:infProt", ns)
+    autorizada = False
+
+    if prot is not None:
+        cstat = prot.find("ns:cStat", ns)
+        if cstat is not None and cstat.text == "100":
+            autorizada = True
+
+    if not autorizada:
+        return "nao_autorizada"
+
     emit = root.find(".//ns:emit", ns)
     dest = root.find(".//ns:dest", ns)
-    cnpj_emitente = apenas_numeros(emit.find("ns:CNPJ", ns).text) if emit is not None and emit.find("ns:CNPJ", ns) is not None else ""
-    cnpj_destinatario = apenas_numeros(dest.find("ns:CNPJ", ns).text) if dest is not None and dest.find("ns:CNPJ", ns) is not None else ""
+
+    cnpj_emitente = apenas_numeros(
+        emit.find("ns:CNPJ", ns).text
+    ) if emit is not None and emit.find("ns:CNPJ", ns) is not None else ""
+
+    cnpj_destinatario = apenas_numeros(
+        dest.find("ns:CNPJ", ns).text
+    ) if dest is not None and dest.find("ns:CNPJ", ns) is not None else ""
+
     cnpj_empresa = apenas_numeros(empresa.cnpj)
 
     if cnpj_emitente != cnpj_empresa and cnpj_destinatario != cnpj_empresa:
@@ -106,6 +137,7 @@ def ler_xml(xml_bytes, empresa):
         tipo_nota = "saida" if cnpj_emitente == cnpj_empresa else "entrada"
 
     icms_tot = root.find(".//ns:ICMSTot", ns)
+
     def get_decimal(tag):
         el = icms_tot.find(f"ns:{tag}", ns) if icms_tot is not None else None
         try:
@@ -115,7 +147,6 @@ def ler_xml(xml_bytes, empresa):
 
     data_emissao = datetime.fromisoformat(data_str.replace("Z", ""))
 
-    # Criação da Nota (Mantido seu original)
     nf = NotaFiscal.objects.create(
         empresa=empresa,
         chave=chave,
@@ -127,17 +158,19 @@ def ler_xml(xml_bytes, empresa):
         valor_pis=get_decimal("vPIS"),
         valor_cofins=get_decimal("vCOFINS"),
         valor_tributos=get_decimal("vTotTrib"),
-        tipo=tipo_nota
+        tipo=tipo_nota,
+        autorizada=True
     )
 
-    # NOVO: Salvar CFOPs da nota para o gráfico
+    # CFOP
     itens = root.findall(".//ns:det", ns)
+
     for item in itens:
         prod = item.find("ns:prod", ns)
         if prod is not None:
             cfop_v = prod.find("ns:CFOP", ns).text
             v_prod = Decimal(prod.find("ns:vProd", ns).text or "0.00")
-            
+
             NotaFiscalCFOP.objects.create(
                 empresa=empresa,
                 nota=nf,
@@ -187,21 +220,20 @@ def obter_metricas_dashboard(empresa, data_inicio=None, data_fim=None, tipo_nota
     }
 
 def identificar_furos(empresa, tipo_nota):
-    """Verifica se há números faltando na sequência das notas."""
-    if not tipo_nota: 
-        return [] # Só faz sentido checar furo por tipo específico
-    
-    numeros = NotaFiscal.objects.filter(empresa=empresa, tipo=tipo_nota)\
-        .values_list('numero', flat=True)
-    
-    if not numeros: return []
-    
-    # Converte para int para achar o gap
-    nums = sorted([int(n) for n in numeros if n.isdigit()])
-    if not nums: return []
+    if not tipo_nota:
+        return []
 
-    # Cria set do esperado vs real
+    numeros = NotaFiscal.objects.filter(
+        empresa=empresa,
+        tipo=tipo_nota,
+        autorizada=True
+    ).values_list('numero', flat=True)
+
+    nums = sorted([int(n) for n in numeros if n.isdigit()])
+    if not nums:
+        return []
+
     esperado = set(range(min(nums), max(nums) + 1))
     faltantes = esperado - set(nums)
-    
-    return sorted(list(faltantes))[:10] # Retorna os 10 primeiros furos
+
+    return sorted(list(faltantes))[:10]

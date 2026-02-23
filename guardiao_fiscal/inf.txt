@@ -1,0 +1,82 @@
+
+python manage.py makemigrations
+python manage.py migrate
+
+python manage.py runserver
+
+python manage.py createsuperuser
+
+
+git push origin main
+
+git pull origin main
+
+
+---------------------------------------------------------------------------------------
+
+importação
+
+importar mais detalhes da notas, como impostos 
+
+notas que não foram autorizadas considerar com furo na numeração:
+
+as notas atorizadas geralmente tem :
+ex de notas atotizadas 
+<nProt>135250479475586</nProt>
+
+
+
+
+
+
+
+
+--------------------------------------------
+dashboard
+
+exibir razão social e cpnj
+
+melhorar cards:
+
+melhorar o alerte
+
+poder abrir  um modal com as informçoes do alarme.
+
+
+detalhar mais os impostos da nota no dash
+
+
+
+----------------------------------------------------------
+
+
+
+upload
+
+
+conseguir importar arquivo rar, e arquivo xml solto e em pastas além do 7z
+--------------------------------------------------
+
+Painel fiscal
+
+a tabela colocar um scrol
+
+
+poder abrir a nota em modal e visualizar as informaçoes
+
+-----------------------------------------------------
+
+nav bar se adaptar a tela mobiles
+
+
+-----------------------------------------------------
+melhorar para tela mobiles
+
+tela upload
+tela de login
+tela de cadastro
+
+
+-----------------------------------------------------
+
+

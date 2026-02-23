@@ -13,9 +13,8 @@ class NotaFiscal(models.Model):
     empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE)
     chave = models.CharField(max_length=44, unique=True)
     numero = models.CharField(max_length=20)
-
     data_emissao = models.DateTimeField()
-
+    autorizada = models.BooleanField(default=True)
     valor_total = models.DecimalField(max_digits=15, decimal_places=2, default=0)
     valor_tributos = models.DecimalField(max_digits=15, decimal_places=2, default=0)
     valor_icms = models.DecimalField(max_digits=15, decimal_places=2, default=0)

@@ -77,32 +77,30 @@ from .services import obter_metricas_dashboard
 @login_required
 def dashboard_relatorios(request):
     empresa = request.user.empresa
-    
-    # --- Captura dos Filtros do GET ---
+
     tipo = request.GET.get('tipo')
     search = request.GET.get('search')
-    data_inicio = request.GET.get('data_inicio') # Novo
-    data_fim = request.GET.get('data_fim')       # Novo
+    data_inicio = request.GET.get('data_inicio')
+    data_fim = request.GET.get('data_fim')
 
-    # --- Base de Notas (QuerySet) ---
     notas = NotaFiscal.objects.filter(empresa=empresa)
 
-    # --- Aplicação dos Filtros ---
     if tipo:
         notas = notas.filter(tipo=tipo)
-    
+
     if data_inicio:
         notas = notas.filter(data_emissao__date__gte=data_inicio)
-    
+
     if data_fim:
         notas = notas.filter(data_emissao__date__lte=data_fim)
-        
+
     if search:
         notas = notas.filter(
-            Q(chave__icontains=search) | Q(numero__icontains=search)
+            Q(chave__icontains=search) |
+            Q(numero__icontains=search)
         )
 
-    # --- Gráfico de Evolução Mensal (Mantido) ---
+    # 📈 Evolução Mensal
     evolucao = notas.annotate(mes=TruncMonth('data_emissao')) \
         .values('mes') \
         .annotate(total=Sum('valor_total')) \
@@ -111,32 +109,57 @@ def dashboard_relatorios(request):
     labels_evolucao = [d['mes'].strftime('%b/%Y') for d in evolucao]
     valores_evolucao = [float(d['total']) for d in evolucao]
 
-    # --- NOVAS MÉTRICAS (CFOP, Impostos e Alertas) ---
-    # Chamamos o service passando os filtros atuais para sincronizar os gráficos
+    # 🔥 Métricas centralizadas
     metricas = obter_metricas_dashboard(
-        empresa, 
-        data_inicio=data_inicio, 
-        data_fim=data_fim, 
+        empresa,
+        data_inicio=data_inicio,
+        data_fim=data_fim,
         tipo_nota=tipo
     )
 
-    # Preparação para Gráfico de CFOP
+    t = metricas['totais']
+
+    # 📊 CFOP
     labels_cfop = [c['cfop'] for c in metricas['cfops']]
     valores_cfop = [float(c['total']) for c in metricas['cfops']]
 
-    # Preparação para Gráfico de Impostos (Pizza/Rosca)
-    t = metricas['totais']
-    labels_impostos = ['ICMS', 'IPI', 'PIS', 'COFINS']
-    valores_impostos = [
-        float(t['total_icms'] or 0),
-        float(t['total_ipi'] or 0),
-        float(t['total_pis'] or 0),
-        float(t['total_cofins'] or 0)
-    ]
+    # 📊 Impostos (agora com total geral também)
+    total_icms = float(t['total_icms'] or 0)
+    total_ipi = float(t['total_ipi'] or 0)
+    total_pis = float(t['total_pis'] or 0)
+    total_cofins = float(t['total_cofins'] or 0)
 
-    
+    total_impostos_geral = total_icms + total_ipi + total_pis + total_cofins
+
+    labels_impostos = ['ICMS', 'IPI', 'PIS', 'COFINS']
+    valores_impostos = [total_icms, total_ipi, total_pis, total_cofins]
+
+    # 🚨 Inconsistências para modal
+    inconsistencias = []
+
+    if metricas['furos']:
+        inconsistencias.append({
+            "tipo": "Furo de Numeração",
+            "descricao": f"Salto detectado: {', '.join(map(str, metricas['furos'][:10]))}"
+        })
+
+    duplicadas = NotaFiscal.objects.filter(empresa=empresa) \
+        .values('chave') \
+        .annotate(qtd=Count('id')) \
+        .filter(qtd__gt=1) \
+        .count()
+
+    if duplicadas > 0:
+        inconsistencias.append({
+            "tipo": "Notas Duplicadas",
+            "descricao": f"{duplicadas} chaves duplicadas encontradas."
+        })
 
     context = {
+        # Empresa
+        "empresa_nome": empresa.nome,
+        "empresa_cnpj": empresa.cnpj,
+
         # Gráficos
         'labels_evolucao': json.dumps(labels_evolucao),
         'valores_evolucao': json.dumps(valores_evolucao),
@@ -144,22 +167,24 @@ def dashboard_relatorios(request):
         'valores_cfop': json.dumps(valores_cfop),
         'labels_impostos': json.dumps(labels_impostos),
         'valores_impostos': json.dumps(valores_impostos),
-        
-        # Cards e Totais
+
+        # Cards
         'mes_atual_valor': t['total_vendas'] or 0,
         'total_notas': t['quantidade'] or 0,
-        
-        # Filtros (para persistir nos inputs da tela)
+        'total_impostos_geral': total_impostos_geral,
+
+        # Filtros
         'filter_tipo': tipo,
         'filter_search': search,
         'filter_data_inicio': data_inicio,
         'filter_data_fim': data_fim,
-        
-        # Alertas e Auditoria
+
+        # Auditoria
         'furos': metricas['furos'],
         'ultima_importacao': metricas['ultima_importacao'],
+        'inconsistencias': inconsistencias,
     }
-    
+
     return render(request, "fiscal/relatorios.html", context)
 
 def verificar_alertas(empresa):

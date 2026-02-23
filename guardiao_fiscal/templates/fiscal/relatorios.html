@@ -1,13 +1,19 @@
 {% extends "base.html" %}
+{% load humanize %} {# Necessário ativar no settings.py em INSTALLED_APPS: 'django.contrib.humanize' #}
 
 {% block content %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <div class="container-fluid mt-4">
+    {# CABEÇALHO #}
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
             <h2 class="fw-bold mb-0"><i class="bi bi-bar-chart-line text-primary"></i> Relatórios Estratégicos</h2>
             <p class="text-muted small">Análise de desempenho e saúde fiscal da empresa</p>
+        </div>
+        <div class="text-end">
+            <h5 class="fw-bold mb-0 text-dark">{{ empresa_nome }}</h5>
+            <small class="text-muted">CNPJ: {{ empresa_cnpj }}</small>
         </div>
         
         <div class="dropdown">
@@ -24,6 +30,7 @@
         </div>
     </div>
 
+    {# FILTROS #}
     <div class="row mb-4">
         <div class="col-12">
             <div class="card border-0 shadow-sm p-3">
@@ -65,14 +72,13 @@
         </div>
     </div>
 
+    {# CARDS DE RESUMO #}
     <div class="row g-3 mb-4">
-        <div class="col-md-3">
+        <div class="col-md-4">
             <div class="card border-0 shadow-sm bg-primary text-white h-100">
                 <div class="card-body">
-                    <small class="opacity-75 fw-bold text-uppercase">
-                        Valor total em {{ filter_tipo|default:"Notas" }}
-                    </small>
-                    <h3 class="fw-bold mt-2">R$ {{ mes_atual_valor|floatformat:2 }}</h3>
+                    <small class="opacity-75 fw-bold text-uppercase">Valor total em {{ filter_tipo|default:"Notas" }}</small>
+                    <h3 class="fw-bold mt-2">R$ {{ mes_atual_valor|floatformat:2|intcomma }}</h3>
                     <div class="mt-2 small">
                         <span class="badge bg-white text-primary rounded-pill">
                             <i class="bi bi-check-circle"></i> {{ total_notas }} Notas Processadas
@@ -82,11 +88,10 @@
             </div>
         </div>
 
-        <div class="col-md-6">
-            <div class="card border-0 shadow-sm h-100 {% if furos %}border-start border-4 border-danger{% endif %}">
-                <div class="card-body py-2">
-                    <h6 class="fw-bold mb-2"><i class="bi bi-shield-check text-primary"></i> Auditoria de Integridade</h6>
-                    
+        <div class="col-md-5">
+            <div class="card border-0 shadow-sm h-100 {% if inconsistencias %}border-start border-4 border-danger{% endif %}">
+                <div class="card-body py-3">
+                    <h6 class="fw-bold mb-3"><i class="bi bi-shield-check text-primary"></i> Auditoria de Integridade</h6>
                     <div class="row">
                         <div class="col-6 border-end">
                             <small class="text-muted d-block">Última Importação:</small>
@@ -99,9 +104,11 @@
                             </strong>
                         </div>
                         <div class="col-6">
-                            <small class="text-muted d-block">Furos de Numeração:</small>
-                            {% if furos %}
-                                <span class="badge bg-danger">Detectado salto: {{ furos|join:", " }}...</span>
+                            <small class="text-muted d-block mb-1">Status de Sequência:</small>
+                            {% if inconsistencias %}
+                                <button type="button" class="btn btn-sm btn-danger w-100" data-bs-toggle="modal" data-bs-target="#modalInconsistencias">
+                                    <i class="bi bi-exclamation-triangle"></i> Ver Inconsistências
+                                </button>
                             {% else %}
                                 <span class="text-success small fw-bold">Sequência íntegra <i class="bi bi-patch-check"></i></span>
                             {% endif %}
@@ -113,13 +120,14 @@
 
         <div class="col-md-3 text-center">
             <div class="card border-0 shadow-sm h-100 d-flex justify-content-center align-items-center p-3">
-                <a href="{% url 'upload' %}" class="btn btn-outline-primary w-100 fw-bold">
+                <a href="{% url 'upload' %}" class="btn btn-outline-primary w-100 fw-bold py-2">
                     <i class="bi bi-plus-circle"></i> Novo Upload
                 </a>
             </div>
         </div>
     </div>
 
+    {# GRÁFICOS #}
     <div class="row g-4 mb-4">
         <div class="col-md-8">
             <div class="card border-0 shadow-sm p-4">
@@ -129,33 +137,76 @@
         </div>
         
         <div class="col-md-4">
-            <div class="card border-0 shadow-sm p-4 h-100">
+            <div class="card border-0 shadow-sm p-4 h-100 text-center">
                 <h5 class="fw-bold mb-4">Carga Tributária</h5>
-                <div style="height: 300px;"><canvas id="chartImpostos"></canvas></div>
+                <div style="height: 250px;"><canvas id="chartImpostos"></canvas></div>
+                <div class="mt-auto pt-3">
+                    <h6 class="fw-bold">Total de Impostos: 
+                        <span class="text-danger d-block fs-4">R$ {{ total_impostos_geral|floatformat:2|intcomma }}</span>
+                    </h6>
+                </div>
             </div>
         </div>
     </div>
 
     <div class="row g-4">
-        <div class="col-md-12">
+        <div class="col-12">
             <div class="card border-0 shadow-sm p-4">
                 <h5 class="fw-bold mb-4 text-primary"><i class="bi bi-tags"></i> Faturamento por CFOP</h5>
-                <div style="height: 250px;"><canvas id="chartCFOP"></canvas></div>
+                <div style="height: 300px;"><canvas id="chartCFOP"></canvas></div>
             </div>
         </div>
     </div>
 </div>
 
+{# MODAL DE INCONSISTÊNCIAS - Movido para fora do container principal para evitar conflitos de z-index #}
+<div class="modal fade" id="modalInconsistencias" tabindex="-1" aria-labelledby="modalInconsistenciasLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="modalInconsistenciasLabel">
+                    <i class="bi bi-exclamation-triangle"></i> Inconsistências Detectadas
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" style="max-height: 400px; overflow-y: auto;">
+                {% if inconsistencias %}
+                    {% for item in inconsistencias %}
+                        <div class="alert alert-light border-start border-danger border-4 shadow-sm mb-3">
+                            <div class="d-flex justify-content-between">
+                                <strong class="text-danger">{{ item.tipo }}</strong>
+                                <span class="badge bg-secondary">Nota: {{ item.numero|default:"N/A" }}</span>
+                            </div>
+                            <hr class="my-2">
+                            <p class="mb-0 small text-dark">{{ item.descricao }}</p>
+                        </div>
+                    {% endfor %}
+                {% else %}
+                    <p class="text-center text-muted">Nenhuma inconsistência encontrada.</p>
+                {% endif %}
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {
+        // Opções globais para formatar moeda nos tooltips dos gráficos
+        const currencyConfig = {
+            style: 'currency',
+            currency: 'BRL',
+        };
+
         // --- GRÁFICO EVOLUÇÃO ---
         new Chart(document.getElementById('chartEvolucao'), {
             type: 'line',
             data: {
                 labels: {{ labels_evolucao|safe }},
                 datasets: [{
-                    label: 'Total R$',
+                    label: 'Total Mensal',
                     data: {{ valores_evolucao|safe }},
                     borderColor: '#0d6efd',
                     backgroundColor: 'rgba(13, 110, 253, 0.1)',
@@ -163,33 +214,50 @@
                     tension: 0.3
                 }]
             },
-            options: { responsive: true, maintainAspectRatio: false }
+            options: { 
+                responsive: true, 
+                maintainAspectRatio: false,
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            label: (context) => `Valor: ${context.parsed.y.toLocaleString('pt-BR', currencyConfig)}`
+                        }
+                    }
+                }
+            }
         });
 
-        // --- GRÁFICO IMPOSTOS (PIZZA) ---
+        // --- GRÁFICO IMPOSTOS ---
         new Chart(document.getElementById('chartImpostos'), {
             type: 'doughnut',
             data: {
                 labels: {{ labels_impostos|safe }},
                 datasets: [{
                     data: {{ valores_impostos|safe }},
-                    backgroundColor: ['#0d6efd', '#6610f2', '#6f42c1', '#d63384']
+                    backgroundColor: ['#0d6efd', '#6610f2', '#6f42c1', '#d63384', '#fd7e14']
                 }]
             },
             options: { 
                 responsive: true, 
                 maintainAspectRatio: false,
-                plugins: { legend: { position: 'bottom' } }
+                plugins: { 
+                    legend: { position: 'bottom' },
+                    tooltip: {
+                        callbacks: {
+                            label: (context) => ` ${context.label}: ${context.parsed.toLocaleString('pt-BR', currencyConfig)}`
+                        }
+                    }
+                }
             }
         });
 
-        // --- GRÁFICO CFOP (BARRA HORIZONTAL) ---
+        // --- GRÁFICO CFOP ---
         new Chart(document.getElementById('chartCFOP'), {
             type: 'bar',
             data: {
                 labels: {{ labels_cfop|safe }},
                 datasets: [{
-                    label: 'Volume por CFOP (R$)',
+                    label: 'Volume (R$)',
                     data: {{ valores_cfop|safe }},
                     backgroundColor: '#198754'
                 }]
@@ -197,15 +265,26 @@
             options: {
                 indexAxis: 'y',
                 responsive: true,
-                maintainAspectRatio: false
+                maintainAspectRatio: false,
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            label: (context) => `Total: ${context.parsed.x.toLocaleString('pt-BR', currencyConfig)}`
+                        }
+                    }
+                }
             }
         });
     });
 </script>
 
 <style>
-    .card { border-radius: 12px; transition: 0.2s; }
+    .card { border-radius: 12px; transition: transform 0.2s; }
+    .card:hover { transform: translateY(-2px); }
     .form-control, .form-select { border-radius: 8px; }
     .badge { padding: 8px 12px; }
+    /* Estilização da barra de rolagem do modal */
+    .modal-body::-webkit-scrollbar { width: 6px; }
+    .modal-body::-webkit-scrollbar-thumb { background-color: #dee2e6; border-radius: 10px; }
 </style>
 {% endblock %}
