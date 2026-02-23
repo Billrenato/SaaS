@@ -189,13 +189,26 @@ def dashboard_relatorios(request):
 
 def verificar_alertas(empresa):
     alertas = []
-    # Busca duplicidade por chave de acesso
-    duplicadas_count = NotaFiscal.objects.filter(empresa=empresa)\
-        .values('chave').annotate(qtd=Count('id')).filter(qtd__gt=1).count()
     
-    if duplicadas_count > 0:
-        alertas.append(f"Atenção: Existem {duplicadas_count} notas com chaves duplicadas no sistema.")
+    # 1. Busca duplicidade por chave de acesso
+    chaves_duplicadas = NotaFiscal.objects.filter(empresa=empresa)\
+        .values('chave')\
+        .annotate(qtd=Count('id'))\
+        .filter(qtd__gt=1)
+
+    if chaves_duplicadas.exists():
+        total_duplicadas = chaves_duplicadas.count()
+        # Pegamos as 3 primeiras chaves para exemplificar no alerta
+        exemplo_chaves = ", ".join([c['chave'][-10:] for c in chaves_duplicadas[:3]])
+        
+        alertas.append({
+            'tipo': 'Duplicidade de Chave',
+            'numero': 'Crítico',
+            'descricao': f'Existem {total_duplicadas} chaves de acesso duplicadas. Exemplos (finais): {exemplo_chaves}...'
+        })
+        
     return alertas
+
 
 @login_required
 def exportar_excel(request):
@@ -225,3 +238,51 @@ def exportar_excel(request):
     
     df.to_excel(response, index=False, engine='openpyxl')
     return response
+
+
+from django.http import JsonResponse
+from django.db.models import Sum, Count
+from .models import NotaFiscal
+
+from django.http import JsonResponse
+from django.shortcuts import get_object_or_404
+from django.db.models import Sum, Count
+from .models import NotaFiscal
+
+def nota_detalhes(request, pk):
+
+    nota = get_object_or_404(
+        NotaFiscal.objects.prefetch_related("cfops"),
+        pk=pk
+    )
+
+    cfops = (
+        nota.cfops
+        .values("cfop")
+        .annotate(
+            total=Count("id"),
+            valor_total=Sum("valor")
+        )
+        .order_by("cfop")
+    )
+
+    resumo = [
+        f"{c['cfop']} ({c['total']}x) - R$ {c['valor_total']}"
+        for c in cfops
+    ]
+
+    return JsonResponse({
+        "numero": nota.numero,
+        "data": nota.data_emissao.strftime("%d/%m/%Y %H:%M"),
+        "total": float(nota.valor_total),
+        "chave": nota.chave,
+        # 🔥 IMPOSTOS
+        "icms": float(nota.valor_icms),
+        "ipi": float(nota.valor_ipi),
+        "pis": float(nota.valor_pis),
+        "cofins": float(nota.valor_cofins),
+        "tributos": float(nota.valor_tributos),
+
+        "resumo_cfop": resumo if resumo else []
+    })
+

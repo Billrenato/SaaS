@@ -4,7 +4,8 @@ from .views import (
     upload_xml, 
     listar_notas, 
     dashboard_relatorios, 
-    exportar_excel
+    exportar_excel,
+    nota_detalhes
 )
 
 urlpatterns = [
@@ -19,4 +20,5 @@ urlpatterns = [
     
     # Rota funcional para gerar e baixar o arquivo Excel
     path("relatorios/exportar/", exportar_excel, name="exportar_excel"),
+    path("nota/<int:pk>/detalhes/", nota_detalhes, name="nota_detalhes"),
 ]

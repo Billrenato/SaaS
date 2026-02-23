@@ -34,16 +34,11 @@ ex de notas atotizadas
 --------------------------------------------
 dashboard
 
-exibir razão social e cpnj
 
-melhorar cards:
 
 melhorar o alerte
 
 poder abrir  um modal com as informçoes do alarme.
-
-
-detalhar mais os impostos da nota no dash
 
 
 

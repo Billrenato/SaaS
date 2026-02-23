@@ -19,6 +19,13 @@
                     R$ {{ nota.valor_icms|add:nota.valor_ipi|add:nota.valor_pis|add:nota.valor_cofins|floatformat:2 }}
                 </td>
                 <td class="text-end pe-3 fw-bold">R$ {{ nota.valor_total|floatformat:2 }}</td>
+                <td class="text-center">
+                    <button class="btn btn-sm btn-outline-primary border-0" 
+                        onclick="abrirDetalhes(this)"
+                        data-id="{{ nota.id }}">
+                        <i class="bi bi-eye-fill"></i> 
+                    </button>
+                </td>
             </tr>
             {% empty %}
             <tr><td colspan="5" class="text-center py-4 text-muted">Nenhum registro para este período.</td></tr>

@@ -223,17 +223,43 @@ def identificar_furos(empresa, tipo_nota):
     if not tipo_nota:
         return []
 
-    numeros = NotaFiscal.objects.filter(
+    # 1. Pegamos número e série, pois a sequência depende da série
+    notas = NotaFiscal.objects.filter(
         empresa=empresa,
-        tipo=tipo_nota,
-        autorizada=True
-    ).values_list('numero', flat=True)
+        tipo=tipo_nota
+    ).values('numero', 'serie').distinct()
 
-    nums = sorted([int(n) for n in numeros if n.isdigit()])
-    if not nums:
+    if not notas:
         return []
 
-    esperado = set(range(min(nums), max(nums) + 1))
-    faltantes = esperado - set(nums)
+    # 2. Agrupamos os números por série
+    series_map = {}
+    for n in notas:
+        s = n['serie'] or '1' # Default para série 1 se estiver nulo
+        if s not in series_map:
+            series_map[s] = []
+        try:
+            series_map[s].append(int(n['numero']))
+        except (ValueError, TypeError):
+            continue
 
-    return sorted(list(faltantes))[:10]
+    inconsistencias = []
+
+    # 3. Verificamos furos dentro de cada série
+    for serie, nums in series_map.items():
+        if not nums: continue
+        
+        nums.sort()
+        min_n, max_n = min(nums), max(nums)
+        
+        esperado = set(range(min_n, max_n + 1))
+        faltantes = esperado - set(nums)
+        
+        for f in sorted(list(faltantes))[:15]: # Limitamos para não travar o modal
+            inconsistencias.append({
+                'tipo': f'Furo de Sequência (Série {serie})',
+                'numero': f,
+                'descricao': f'A nota número {f} da série {serie} não foi encontrada no sistema.'
+            })
+
+    return inconsistencias
