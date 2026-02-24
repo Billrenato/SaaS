@@ -55,3 +55,22 @@ class UploadLote(models.Model):
 
     def __str__(self):
         return f"Lote {self.id} - {self.empresa}"
+    
+
+class UploadErro(models.Model):
+    TIPOS = (
+        ("cnpj_invalido", "CNPJ inválido"),
+        ("duplicada", "Duplicada"),
+        ("xml_invalido", "XML inválido"),
+        ("nao_autorizada", "Não autorizada"),
+    )
+
+    lote = models.ForeignKey("UploadLote", on_delete=models.CASCADE, related_name="erros")
+    tipo = models.CharField(max_length=30, choices=TIPOS)
+    chave = models.CharField(max_length=44)
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["lote", "tipo"]),
+        ]    

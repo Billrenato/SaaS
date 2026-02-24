@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+{% load humanize %}
+{% block content %}
+
+<div class="container-fluid mt-4">
+
+    <!-- CABEÇALHO -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h3 class="fw-bold">Histórico de Importações</h3>
+            <span class="badge bg-light text-dark border">
+                {{ total_lotes }} Lotes Processados
+            </span>
+        </div>
+        <a href="{% url 'upload' %}" class="btn btn-primary btn-sm">
+            Nova Importação
+        </a>
+    </div>
+
+    <!-- TABELA DE LOTES -->
+    <div class="card shadow-sm border-0">
+        <div class="table-responsive" style="max-height: 750px; overflow-y: auto;">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>ID</th>
+                        <th>Arquivo</th>
+                        <th>Data</th>
+                        <th>Status</th>
+                        <th>Erros</th>
+                        <th class="text-end">Ações</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for lote in lotes %}
+                    <tr>
+                        <td class="fw-bold">{{ lote.id }}</td>
+                        <td>{{ lote.arquivo.name }}</td>
+                        <td>{{ lote.criado_em|date:"d/m/Y H:i" }}</td>
+
+                        <!-- STATUS -->
+                        <td>
+                            {% if lote.cnpj_invalido > 0 or lote.xml_invalido > 0 or lote.nao_autorizada > 0 %}
+                                <span class="badge bg-danger-subtle text-danger">Com Erros</span>
+                            {% elif lote.duplicada > 0 %}
+                                <span class="badge bg-warning-subtle text-dark">Duplicadas</span>
+                            {% else %}
+                                <span class="badge bg-success-subtle text-success">Processado</span>
+                            {% endif %}
+                        </td>
+
+                        <!-- ERROS -->
+                        <td>
+                            {% if lote.cnpj_invalido > 0 %}
+                                <span class="badge bg-danger me-1">CNPJ: {{ lote.cnpj_invalido }}</span>
+                            {% endif %}
+                            {% if lote.xml_invalido > 0 %}
+                                <span class="badge bg-danger me-1">XML: {{ lote.xml_invalido }}</span>
+                            {% endif %}
+                            {% if lote.nao_autorizada > 0 %}
+                                <span class="badge bg-danger me-1">Não Aut: {{ lote.nao_autorizada }}</span>
+                            {% endif %}
+                            {% if lote.duplicada > 0 %}
+                                <span class="badge bg-warning text-dark">Erro Desconhecido: {{ lote.duplicada }}</span>
+                            {% endif %}
+                            {% if lote.total_erros == 0 %}
+                                —
+                            {% endif %}
+                        </td>
+
+                        <!-- AÇÕES -->
+                        <td class="text-end">
+                            {% if lote.total_erros > 0 %}
+                                <button type="button" onclick="abrirModalErros({{ lote.id }})"
+                                    class="btn btn-sm btn-outline-danger">
+                                    Ver Erros
+                                </button>
+                            {% else %}
+                                —
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-center py-4 text-muted">
+                            Nenhum lote encontrado.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+<!-- MODAL DE ERROS -->
+<div class="modal fade" id="modalErros" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+
+            <div class="modal-header">
+                <h5 class="modal-title">Erros do Lote</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+
+            <div class="modal-body" id="modal-body-erros"></div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<!-- SCRIPT DO MODAL -->
+<script>
+function abrirModalErros(loteId) {
+    const modalBody = document.getElementById("modal-body-erros");
+
+    // Spinner de carregamento
+    modalBody.innerHTML = `
+        <div class="text-center py-4">
+            <div class="spinner-border text-primary"></div>
+            <p class="mt-2 text-muted">Carregando erros...</p>
+        </div>
+    `;
+
+    fetch(`/erros-lote/${loteId}/`)
+        .then(response => response.json())
+        .then(data => {
+            let html = "";
+
+            // Map para títulos e cores
+            const tiposMap = {
+                cnpj_invalido: {titulo: "CNPJ Inválido", badge: "bg-danger"},
+                xml_invalido: {titulo: "XML Inválidos", badge: "bg-danger"},
+                nao_autorizada: {titulo: "Não Autorizadas", badge: "bg-danger"},
+                duplicada: {titulo: "Duplicadas", badge: "bg-warning text-dark"}
+            };
+
+            for (let tipo in data) {
+                if (data[tipo].length > 0) {
+                    let info = tiposMap[tipo] || {titulo: tipo, badge: "bg-secondary"};
+                    html += `
+                        <div class="mb-4">
+                            <h6 class="fw-bold border-bottom pb-2">${info.titulo} (${data[tipo].length})</h6>
+                            <div style="max-height:250px; overflow-y:auto;">
+                                <table class="table table-sm table-striped table-hover mb-0">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th style="width:50px;">#</th>
+                                            <th>Chave XML</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                    `;
+                    data[tipo].forEach((chave, index) => {
+                        html += `
+                            <tr>
+                                <td>${index + 1}</td>
+                                <td class="small text-break">${chave}</td>
+                            </tr>
+                        `;
+                    });
+                    html += `
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    `;
+                }
+            }
+
+            if (html === "") {
+                html = `<div class="alert alert-success text-center">Nenhum erro neste lote.</div>`;
+            }
+
+            modalBody.innerHTML = html;
+            let modal = new bootstrap.Modal(document.getElementById("modalErros"));
+            modal.show();
+        })
+        .catch(error => {
+            modalBody.innerHTML = `<div class="alert alert-danger text-center">Erro ao carregar dados.</div>`;
+        });
+}
+</script>
+
+{% endblock %}

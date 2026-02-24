@@ -12,13 +12,17 @@ from decimal import Decimal
 from django.db import transaction
 from django.db.models import Sum, Count # Adicionado para as métricas
 from .models import NotaFiscal, NotaFiscalCFOP, UploadLote # Adicionado modelos extras
+from .models import UploadErro
 
 logger = logging.getLogger(__name__)
 
 def apenas_numeros(valor):
     return re.sub(r'\D', '', str(valor))
-
 def processar_lote(upload_lote):
+
+    # 🔥 limpa erros antigos se reprocessar o mesmo lote
+    UploadErro.objects.filter(lote=upload_lote).delete()
+
     caminho = upload_lote.arquivo.path
     empresa = upload_lote.empresa
     pasta_temp = tempfile.mkdtemp()
@@ -30,12 +34,6 @@ def processar_lote(upload_lote):
         "xml_invalido": 0,
         "nao_autorizada": 0,
         "total": 0,
-
-        # 🔥 LISTAS DE CHAVES
-        "chaves_cnpj_invalido": [],
-        "chaves_duplicadas": [],
-        "chaves_xml_invalido": [],
-        "chaves_nao_autorizada": [],
     }
 
     try:
@@ -69,6 +67,7 @@ def processar_lote(upload_lote):
         for raiz, _, arquivos in os.walk(pasta_temp):
             for nome in arquivos:
                 if nome.lower().endswith(".xml"):
+
                     resultado["total"] += 1
                     caminho_xml = os.path.join(raiz, nome)
 
@@ -78,8 +77,8 @@ def processar_lote(upload_lote):
 
                         status = ler_xml(xml_bytes, empresa)
 
-                        # tenta extrair chave
-                        chave = "desconhecida"
+                        # 🔥 extrair chave da NFe
+                        chave = "XML comprometido"
                         try:
                             root = ET.fromstring(xml_bytes)
                             infNFe = root.find(".//{http://www.portalfiscal.inf.br/nfe}infNFe")
@@ -88,29 +87,54 @@ def processar_lote(upload_lote):
                         except:
                             pass
 
+                        # ======================
+                        # STATUS
+                        # ======================
                         if status == "salva":
                             resultado["salvas"] += 1
 
                         elif status == "cnpj_invalido":
                             resultado["cnpj_invalido"] += 1
-                            resultado["chaves_cnpj_invalido"].append(chave)
+                            UploadErro.objects.create(
+                                lote=upload_lote,
+                                tipo="cnpj_invalido",
+                                chave=chave
+                            )
 
                         elif status == "duplicada":
                             resultado["duplicadas"] += 1
-                            resultado["chaves_duplicadas"].append(chave)
+                            UploadErro.objects.create(
+                                lote=upload_lote,
+                                tipo="duplicada",
+                                chave=chave
+                            )
 
                         elif status == "xml_invalido":
                             resultado["xml_invalido"] += 1
-                            resultado["chaves_xml_invalido"].append(chave)
+                            UploadErro.objects.create(
+                                lote=upload_lote,
+                                tipo="xml_invalido",
+                                chave=chave
+                            )
 
                         elif status == "nao_autorizada":
                             resultado["nao_autorizada"] += 1
-                            resultado["chaves_nao_autorizada"].append(chave)
+                            UploadErro.objects.create(
+                                lote=upload_lote,
+                                tipo="nao_autorizada",
+                                chave=chave
+                            )
 
                     except Exception as e:
                         logger.error(f"Erro no XML {nome}: {e}")
+
                         resultado["xml_invalido"] += 1
-                        resultado["chaves_xml_invalido"].append(nome)
+
+                        UploadErro.objects.create(
+                            lote=upload_lote,
+                            tipo="xml_invalido",
+                            chave=nome
+                        )
 
         return resultado
 

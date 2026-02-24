@@ -12,11 +12,14 @@ from .services import processar_lote
 
 @login_required
 def upload_xml(request):
+
     if request.method == "POST":
+
         arquivo = request.FILES.get("arquivo")
+
         if not arquivo:
             messages.error(request, "Por favor, selecione um arquivo.")
-            return render(request, "fiscal/upload.html")
+            return redirect("upload_xml")
 
         lote = UploadLote.objects.create(
             empresa=request.user.empresa,
@@ -24,14 +27,6 @@ def upload_xml(request):
         )
 
         resultado = processar_lote(lote)
-
-        # 🔥 salva listas na session para usar no modal
-        request.session["erros_xml"] = {
-            "cnpj_invalido": resultado["chaves_cnpj_invalido"],
-            "duplicadas": resultado["chaves_duplicadas"],
-            "xml_invalido": resultado["chaves_xml_invalido"],
-            "nao_autorizada": resultado["chaves_nao_autorizada"],
-        }
 
         # =========================
         # MENSAGEM PRINCIPAL
@@ -45,16 +40,17 @@ def upload_xml(request):
         else:
             messages.success(
                 request,
-                f"{resultado['salvas']} notas importadas com sucesso de {resultado['total']} arquivos."
+                f"{resultado['salvas']} notas importadas com sucesso "
+                f"de {resultado['total']} arquivos."
             )
 
         # =========================
-        # ALERTAS ESPECÍFICOS
+        # ALERTAS
         # =========================
         if resultado["cnpj_invalido"] > 0:
             messages.warning(
                 request,
-                f"{resultado['cnpj_invalido']} XML ignorados (CNPJ diferente da empresa)."
+                f"{resultado['cnpj_invalido']} XML ignorados (CNPJ diferente)."
             )
 
         if resultado["duplicadas"] > 0:
@@ -72,14 +68,43 @@ def upload_xml(request):
         if resultado["nao_autorizada"] > 0:
             messages.warning(
                 request,
-                f"{resultado['nao_autorizada']} notas não autorizadas pela SEFAZ."
+                f"{resultado['nao_autorizada']} notas não autorizadas."
             )
 
-        return render(request, "fiscal/upload.html")
-    
+        return redirect("upload")
+    lotes = UploadLote.objects.filter(
+        empresa=request.user.empresa
+    ).order_by("-id")
 
-    return render(request, "fiscal/upload.html")
+    return render(request, "fiscal/upload.html", {
+        "lotes": lotes
+    })
 
+from django.contrib.auth.decorators import login_required
+from django.db.models import Count
+from .models import UploadLote, UploadErro
+
+from django.db import models
+
+@login_required
+def historico_uploads(request):
+
+    lotes = (
+        UploadLote.objects
+        .filter(empresa=request.user.empresa)
+        .annotate(
+            total_erros=Count("erros"),
+            cnpj_invalido=Count("erros", filter=models.Q(erros__tipo="cnpj_invalido")),
+            duplicada=Count("erros", filter=models.Q(erros__tipo="duplicada")),
+            xml_invalido=Count("erros", filter=models.Q(erros__tipo="xml_invalido")),
+            nao_autorizada=Count("erros", filter=models.Q(erros__tipo="nao_autorizada")),
+        )
+        .order_by("-id")
+    )
+
+    return render(request, "fiscal/historico_uploads.html", {
+        "lotes": lotes
+    })
 @login_required
 def listar_notas(request):
     notas_qs = NotaFiscal.objects.filter(empresa=request.user.empresa).order_by("-data_emissao")
@@ -117,6 +142,33 @@ from django.db.models.functions import TruncMonth
 from .models import NotaFiscal
 # Importe as funções que criamos no services.py
 from .services import obter_metricas_dashboard 
+
+from django.http import JsonResponse
+from django.contrib.auth.decorators import login_required
+from .models import UploadErro
+
+
+@login_required
+def erros_lote(request, lote_id):
+    lote = get_object_or_404(
+        UploadLote,
+        id=lote_id,
+        empresa=request.user.empresa
+    )
+
+    erros = lote.erros.all()
+
+    dados = {}
+
+    for erro in erros:
+        tipo = erro.get_tipo_display()  # 👈 pega o nome bonitinho do choices
+
+        if tipo not in dados:
+            dados[tipo] = []
+
+        dados[tipo].append(erro.chave)
+
+    return JsonResponse(dados)
 
 @login_required
 def dashboard_relatorios(request):

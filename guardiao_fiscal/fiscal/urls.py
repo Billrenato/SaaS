@@ -1,11 +1,14 @@
 from django.urls import path
+from . import views
 # Importando todas as views necessárias do arquivo views.py atual
 from .views import (
     upload_xml, 
     listar_notas, 
     dashboard_relatorios, 
     exportar_excel,
-    nota_detalhes
+    nota_detalhes,
+    erros_lote,
+    historico_uploads
 )
 
 urlpatterns = [
@@ -21,4 +24,7 @@ urlpatterns = [
     # Rota funcional para gerar e baixar o arquivo Excel
     path("relatorios/exportar/", exportar_excel, name="exportar_excel"),
     path("nota/<int:pk>/detalhes/", nota_detalhes, name="nota_detalhes"),
+    path("erros-lote/<int:lote_id>/", erros_lote, name="erros_lote"),
+    path("historico-uploads/", historico_uploads, name="historico_uploads"),
+    
 ]

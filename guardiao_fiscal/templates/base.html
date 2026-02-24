@@ -17,6 +17,7 @@
                     <li class="nav-item"><a class="nav-link" href="{% url 'dashboard_relatorios' %}">Dashboard</a></li>
                     <li class="nav-item"><a class="nav-link" href="{% url 'listar_notas' %}">Notas</a></li>
                     <li class="nav-item"><a class="nav-link" href="{% url 'upload' %}">Importar</a></li>
+                    <li class="nav-item"><a class="nav-link" href="{% url 'historico_uploads' %}">Histórico</a></li>
                 </ul>
                 <span class="navbar-text text-white me-3">Olá, {{ user.username }}</span>
                 <form action="{% url 'logout' %}" method="post" style="display:inline;">
