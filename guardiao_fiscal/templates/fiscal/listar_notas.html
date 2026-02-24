@@ -21,14 +21,22 @@
             </div>
         </div>
     </div>
-
     {% if messages %}
-        {% for message in messages %}
-            <div class="alert alert-{{ message.tags }} alert-dismissible fade show shadow-sm" role="alert">
-                {{ message }}
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-            </div>
-        {% endfor %}
+            {% if request.session.chaves_duplicadas or request.session.chaves_cnpj_invalido or request.session.chaves_xml_invalido or request.session.chaves_nao_autorizada %}
+                <div class="text-center mb-3">
+                    <button class="btn btn-outline-danger btn-sm" data-bs-toggle="modal" data-bs-target="#modalErros">
+                        <i class="bi bi-exclamation-triangle-fill me-1"></i>
+                        Ver notas com erro
+                    </button>
+                </div>
+            {% endif %}
+
+            {% for message in messages %}
+                <div class="alert alert-{{ message.tags }} alert-dismissible fade show shadow-sm mb-4" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            {% endfor %}
     {% endif %}
 
     {# VOLTANDO AS CORES ORIGINAIS DAS PÍLULAS #}
@@ -133,6 +141,72 @@
             <div class="modal-body p-4" id="modalBodyNota"></div>
         </div>
     </div>
+</div>
+<div class="modal fade" id="modalErros" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content">
+
+      <div class="modal-header bg-danger text-white">
+        <h5 class="modal-title">
+          <i class="bi bi-x-octagon-fill me-2"></i>Notas com erro na importação
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+
+      <div class="modal-body">
+
+        {% if request.session.chaves_duplicadas %}
+        <div class="mb-3">
+          <h6 class="text-danger">Duplicadas</h6>
+          <ul class="list-group">
+            {% for chave in request.session.chaves_duplicadas %}
+              <li class="list-group-item small">{{ chave }}</li>
+            {% endfor %}
+          </ul>
+        </div>
+        {% endif %}
+
+        {% if request.session.chaves_cnpj_invalido %}
+        <div class="mb-3">
+          <h6 class="text-warning">CNPJ inválido</h6>
+          <ul class="list-group">
+            {% for chave in request.session.chaves_cnpj_invalido %}
+              <li class="list-group-item small">{{ chave }}</li>
+            {% endfor %}
+          </ul>
+        </div>
+        {% endif %}
+
+        {% if request.session.chaves_xml_invalido %}
+        <div class="mb-3">
+          <h6 class="text-secondary">XML inválido</h6>
+          <ul class="list-group">
+            {% for chave in request.session.chaves_xml_invalido %}
+              <li class="list-group-item small">{{ chave }}</li>
+            {% endfor %}
+          </ul>
+        </div>
+        {% endif %}
+
+        {% if request.session.chaves_nao_autorizada %}
+        <div class="mb-3">
+          <h6 class="text-dark">Não autorizadas</h6>
+          <ul class="list-group">
+            {% for chave in request.session.chaves_nao_autorizada %}
+              <li class="list-group-item small">{{ chave }}</li>
+            {% endfor %}
+          </ul>
+        </div>
+        {% endif %}
+
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+      </div>
+
+    </div>
+  </div>
 </div>
 
 <style>

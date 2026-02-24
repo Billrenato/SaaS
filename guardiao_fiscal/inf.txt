@@ -49,7 +49,6 @@ poder abrir  um modal com as informçoes do alarme.
 upload
 
 
-conseguir importar arquivo rar, e arquivo xml solto e em pastas além do 7z
 --------------------------------------------------
 
 Painel fiscal
@@ -57,7 +56,7 @@ Painel fiscal
 a tabela colocar um scrol
 
 
-poder abrir a nota em modal e visualizar as informaçoes
+
 
 -----------------------------------------------------
 

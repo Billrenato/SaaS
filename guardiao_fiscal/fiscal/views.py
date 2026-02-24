@@ -22,18 +22,62 @@ def upload_xml(request):
             empresa=request.user.empresa,
             arquivo=arquivo
         )
+
         resultado = processar_lote(lote)
 
-        if resultado["salvas"] == 0:
-            messages.error(request, "Nenhuma nota foi importada.")
-        else:
-            messages.success(request, f"{resultado['salvas']} notas importadas.")
+        # 🔥 salva listas na session para usar no modal
+        request.session["erros_xml"] = {
+            "cnpj_invalido": resultado["chaves_cnpj_invalido"],
+            "duplicadas": resultado["chaves_duplicadas"],
+            "xml_invalido": resultado["chaves_xml_invalido"],
+            "nao_autorizada": resultado["chaves_nao_autorizada"],
+        }
 
-        # Exibe alertas se houver problemas específicos
-        if resultado.get("cnpj_invalido"): messages.warning(request, f"{resultado['cnpj_invalido']} CNPJs inválidos.")
-        if resultado.get("duplicadas"): messages.warning(request, f"{resultado['duplicadas']} duplicadas.")
-        
-        return redirect("listar_notas")
+        # =========================
+        # MENSAGEM PRINCIPAL
+        # =========================
+        if resultado["salvas"] == 0:
+            messages.error(
+                request,
+                f"Nenhuma nota foi importada. "
+                f"Total de arquivos: {resultado['total']}."
+            )
+        else:
+            messages.success(
+                request,
+                f"{resultado['salvas']} notas importadas com sucesso de {resultado['total']} arquivos."
+            )
+
+        # =========================
+        # ALERTAS ESPECÍFICOS
+        # =========================
+        if resultado["cnpj_invalido"] > 0:
+            messages.warning(
+                request,
+                f"{resultado['cnpj_invalido']} XML ignorados (CNPJ diferente da empresa)."
+            )
+
+        if resultado["duplicadas"] > 0:
+            messages.warning(
+                request,
+                f"{resultado['duplicadas']} XML duplicados."
+            )
+
+        if resultado["xml_invalido"] > 0:
+            messages.warning(
+                request,
+                f"{resultado['xml_invalido']} XML inválidos."
+            )
+
+        if resultado["nao_autorizada"] > 0:
+            messages.warning(
+                request,
+                f"{resultado['nao_autorizada']} notas não autorizadas pela SEFAZ."
+            )
+
+        return render(request, "fiscal/upload.html")
+    
+
     return render(request, "fiscal/upload.html")
 
 @login_required

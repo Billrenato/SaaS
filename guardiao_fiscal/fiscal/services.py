@@ -30,10 +30,18 @@ def processar_lote(upload_lote):
         "xml_invalido": 0,
         "nao_autorizada": 0,
         "total": 0,
+
+        # 🔥 LISTAS DE CHAVES
+        "chaves_cnpj_invalido": [],
+        "chaves_duplicadas": [],
+        "chaves_xml_invalido": [],
+        "chaves_nao_autorizada": [],
     }
 
     try:
+        # ======================
         # EXTRAÇÃO
+        # ======================
         if caminho.lower().endswith(".7z"):
             with py7zr.SevenZipFile(caminho, mode='r') as archive:
                 archive.extractall(path=pasta_temp)
@@ -55,7 +63,9 @@ def processar_lote(upload_lote):
         else:
             raise Exception("Formato de arquivo não suportado.")
 
+        # ======================
         # VARREDURA
+        # ======================
         for raiz, _, arquivos in os.walk(pasta_temp):
             for nome in arquivos:
                 if nome.lower().endswith(".xml"):
@@ -64,22 +74,51 @@ def processar_lote(upload_lote):
 
                     try:
                         with open(caminho_xml, 'rb') as f:
-                            status = ler_xml(f.read(), empresa)
+                            xml_bytes = f.read()
 
-                        if status in resultado:
-                            resultado[status] += 1
-                        elif status == "salva":
+                        status = ler_xml(xml_bytes, empresa)
+
+                        # tenta extrair chave
+                        chave = "desconhecida"
+                        try:
+                            root = ET.fromstring(xml_bytes)
+                            infNFe = root.find(".//{http://www.portalfiscal.inf.br/nfe}infNFe")
+                            if infNFe is not None:
+                                chave = infNFe.attrib.get("Id", "").replace("NFe", "")
+                        except:
+                            pass
+
+                        if status == "salva":
                             resultado["salvas"] += 1
+
+                        elif status == "cnpj_invalido":
+                            resultado["cnpj_invalido"] += 1
+                            resultado["chaves_cnpj_invalido"].append(chave)
+
+                        elif status == "duplicada":
+                            resultado["duplicadas"] += 1
+                            resultado["chaves_duplicadas"].append(chave)
+
+                        elif status == "xml_invalido":
+                            resultado["xml_invalido"] += 1
+                            resultado["chaves_xml_invalido"].append(chave)
+
+                        elif status == "nao_autorizada":
+                            resultado["nao_autorizada"] += 1
+                            resultado["chaves_nao_autorizada"].append(chave)
 
                     except Exception as e:
                         logger.error(f"Erro no XML {nome}: {e}")
                         resultado["xml_invalido"] += 1
+                        resultado["chaves_xml_invalido"].append(nome)
 
         return resultado
 
     finally:
         shutil.rmtree(pasta_temp)
 
+
+    
 @transaction.atomic
 def ler_xml(xml_bytes, empresa):
     try:
@@ -223,43 +262,46 @@ def identificar_furos(empresa, tipo_nota):
     if not tipo_nota:
         return []
 
-    # 1. Pegamos número e série, pois a sequência depende da série
     notas = NotaFiscal.objects.filter(
         empresa=empresa,
-        tipo=tipo_nota
-    ).values('numero', 'serie').distinct()
+        tipo=tipo_nota,
+        autorizada=True
+    ).exclude(numero__isnull=True).exclude(numero="") \
+     .values("numero", "serie")
 
-    if not notas:
-        return []
-
-    # 2. Agrupamos os números por série
     series_map = {}
+
     for n in notas:
-        s = n['serie'] or '1' # Default para série 1 se estiver nulo
-        if s not in series_map:
-            series_map[s] = []
+        serie = n["serie"] or "1"
         try:
-            series_map[s].append(int(n['numero']))
+            num = int(n["numero"])
         except (ValueError, TypeError):
             continue
 
+        series_map.setdefault(serie, []).append(num)
+
     inconsistencias = []
 
-    # 3. Verificamos furos dentro de cada série
-    for serie, nums in series_map.items():
-        if not nums: continue
-        
-        nums.sort()
-        min_n, max_n = min(nums), max(nums)
-        
-        esperado = set(range(min_n, max_n + 1))
-        faltantes = esperado - set(nums)
-        
-        for f in sorted(list(faltantes))[:15]: # Limitamos para não travar o modal
-            inconsistencias.append({
-                'tipo': f'Furo de Sequência (Série {serie})',
-                'numero': f,
-                'descricao': f'A nota número {f} da série {serie} não foi encontrada no sistema.'
-            })
+    for serie, numeros in series_map.items():
+        if len(numeros) < 2:
+            continue
+
+        numeros.sort()
+
+        anterior = numeros[0]
+
+        for atual in numeros[1:]:
+            if atual > anterior + 1:
+                for f in range(anterior + 1, atual):
+                    inconsistencias.append({
+                        "tipo": f"Furo de Sequência (Série {serie})",
+                        "numero": f,
+                        "descricao": f"A nota número {f} da série {serie} não foi encontrada no sistema."
+                    })
+
+                    if len(inconsistencias) >= 15:
+                        return inconsistencias
+
+            anterior = atual
 
     return inconsistencias

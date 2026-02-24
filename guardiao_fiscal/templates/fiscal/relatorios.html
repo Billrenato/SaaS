@@ -126,16 +126,17 @@
                             <p class="text-muted mb-0 x-small">Último Sincronismo:</p>
                             <span class="fw-bold small">{% if ultima_importacao %}{{ ultima_importacao.criado_em|date:"d/m/H:i" }}{% else %}--{% endif %}</span>
                         </div>
-                        <div class="col-6">
-                            {% if inconsistencias %}
-                                <button type="button" class="btn btn-danger btn-sm w-100 animate-pulse" data-bs-toggle="modal" data-bs-target="#modalInconsistencias">
-                                    <i class="bi bi-exclamation-octagon me-1"></i> Ver Falhas
-                                </button>
-                            {% else %}
-                                <div class="text-success small fw-bold d-flex align-items-center">
-                                    <i class="bi bi-check-all fs-4 me-1"></i> Sequência OK
-                                </div>
-                            {% endif %}
+                       <div class="col-6">
+                                {% if inconsistencias %}
+                                    <button type="button" class="btn btn-danger btn-sm w-100 animate-pulse" data-bs-toggle="modal" data-bs-target="#modalInconsistencias">
+                                        <i class="bi bi-exclamation-octagon me-1"></i> Ver Falhas
+                                    </button>
+                                {% else %}
+                                    <div class="text-success small fw-bold d-flex align-items-center">
+                                        <i class="bi bi-check-all fs-4 me-1"></i> Sequência OK
+                                    </div>
+                                {% endif %}
+                            </div>
                         </div>
                     </div>
                 </div>
