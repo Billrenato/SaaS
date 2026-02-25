@@ -259,14 +259,18 @@ def ler_xml(xml_bytes, empresa):
 # --- NOVAS FUNÇÕES PARA O DASHBOARD ---
 
 def obter_metricas_dashboard(empresa, data_inicio=None, data_fim=None, tipo_nota=None):
-    """Filtra e agrupa dados para os cards e gráficos."""
     qs = NotaFiscal.objects.filter(empresa=empresa)
     
-    if data_inicio: qs = qs.filter(data_emissao__date__gte=data_inicio)
-    if data_fim: qs = qs.filter(data_emissao__date__lte=data_fim)
-    if tipo_nota: qs = qs.filter(tipo=tipo_nota)
+    if data_inicio:
+        qs = qs.filter(data_emissao__date__gte=data_inicio)
 
-    # Totais para os Cards
+    if data_fim:
+        qs = qs.filter(data_emissao__date__lte=data_fim)
+
+    if tipo_nota:
+        qs = qs.filter(tipo=tipo_nota)
+
+    # Totais
     totais = qs.aggregate(
         total_vendas=Sum('valor_total'),
         total_icms=Sum('valor_icms'),
@@ -276,16 +280,23 @@ def obter_metricas_dashboard(empresa, data_inicio=None, data_fim=None, tipo_nota
         quantidade=Count('id')
     )
 
-    # Dados para Gráfico CFOP (Soma valor por CFOP)
-    cfops = NotaFiscalCFOP.objects.filter(nota__in=qs)\
-        .values('cfop')\
-        .annotate(total=Sum('valor'))\
+    # CFOP
+    cfops = (
+        NotaFiscalCFOP.objects
+        .filter(nota__in=qs)
+        .values('cfop')
+        .annotate(total=Sum('valor'))
         .order_by('-total')
+    )
 
-    # Detecção de Furos (Sequência numérica)
-    furos = identificar_furos(empresa, tipo_nota)
+    # ✅ AQUI está o conserto
+    furos = identificar_furos(
+        empresa,
+        tipo_nota,
+        data_inicio=data_inicio,
+        data_fim=data_fim
+    )
 
-    # Info da última importação
     ultima_imp = UploadLote.objects.filter(empresa=empresa).order_by('-criado_em').first()
 
     return {
@@ -294,21 +305,23 @@ def obter_metricas_dashboard(empresa, data_inicio=None, data_fim=None, tipo_nota
         "furos": furos,
         "ultima_importacao": ultima_imp,
     }
-
-def identificar_furos(empresa, tipo_nota):
+def identificar_furos(empresa, tipo_nota, data_inicio=None, data_fim=None):
     if not tipo_nota:
         return []
 
-    notas = (
-        NotaFiscal.objects.filter(
-            empresa=empresa,
-            tipo=tipo_nota,
-            autorizada=True
-        )
-        .exclude(numero__isnull=True)
-        .exclude(numero="")
-        .values_list("numero", flat=True)
-    )
+    qs = NotaFiscal.objects.filter(
+        empresa=empresa,
+        tipo=tipo_nota,
+        autorizada=True
+    ).exclude(numero__isnull=True).exclude(numero="")
+
+    if data_inicio:
+        qs = qs.filter(data_emissao__date__gte=data_inicio)
+
+    if data_fim:
+        qs = qs.filter(data_emissao__date__lte=data_fim)
+
+    notas = qs.values_list("numero", flat=True)
 
     numeros = []
     for n in notas:
