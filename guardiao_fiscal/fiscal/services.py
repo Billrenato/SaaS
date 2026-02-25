@@ -163,10 +163,9 @@ def ler_xml(xml_bytes, empresa):
     data_str = ide.find("ns:dhEmi", ns).text
     chave = infNFe.attrib.get("Id", "").replace("NFe", "")
 
-    if NotaFiscal.objects.filter(chave=chave).exists():
-        return "duplicada"
-
-    # 🔥 VERIFICA AUTORIZAÇÃO
+    # ======================
+    # AUTORIZAÇÃO
+    # ======================
     prot = root.find(".//ns:protNFe/ns:infProt", ns)
     autorizada = False
 
@@ -178,6 +177,9 @@ def ler_xml(xml_bytes, empresa):
     if not autorizada:
         return "nao_autorizada"
 
+    # ======================
+    # CNPJ
+    # ======================
     emit = root.find(".//ns:emit", ns)
     dest = root.find(".//ns:dest", ns)
 
@@ -194,6 +196,15 @@ def ler_xml(xml_bytes, empresa):
     if cnpj_emitente != cnpj_empresa and cnpj_destinatario != cnpj_empresa:
         return "cnpj_invalido"
 
+    # ======================
+    # DUPLICIDADE (SÓ AGORA)
+    # ======================
+    if NotaFiscal.objects.filter(chave=chave, empresa=empresa).exists():
+        return "duplicada"
+
+    # ======================
+    # TIPO
+    # ======================
     if modelo == "65":
         tipo_nota = "nfce"
     else:
@@ -225,7 +236,9 @@ def ler_xml(xml_bytes, empresa):
         autorizada=True
     )
 
+    # ======================
     # CFOP
+    # ======================
     itens = root.findall(".//ns:det", ns)
 
     for item in itens:
