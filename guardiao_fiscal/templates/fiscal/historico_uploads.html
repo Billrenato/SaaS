@@ -62,7 +62,7 @@
                                 <span class="badge bg-danger me-1">Não Aut: {{ lote.nao_autorizada }}</span>
                             {% endif %}
                             {% if lote.duplicada > 0 %}
-                                <span class="badge bg-warning text-dark">Erro Desconhecido: {{ lote.duplicada }}</span>
+                                <span class="badge bg-warning text-dark">Duplicada: {{ lote.duplicada }}</span>
                             {% endif %}
                             {% if lote.total_erros == 0 %}
                                 —
