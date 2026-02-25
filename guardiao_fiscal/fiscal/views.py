@@ -8,7 +8,7 @@ from django.http import HttpResponse
 from django.db.models import Sum, Count
 from django.db.models.functions import TruncMonth
 from .models import UploadLote, NotaFiscal
-from .services import processar_lote
+from .services import processar_lote,identificar_furos
 
 @login_required
 def upload_xml(request):
@@ -231,12 +231,14 @@ def dashboard_relatorios(request):
     valores_impostos = [total_icms, total_ipi, total_pis, total_cofins]
 
     # 🚨 Inconsistências para modal
+
     inconsistencias = []
 
     if metricas['furos']:
         inconsistencias.append({
             "tipo": "Furo de Numeração",
-            "descricao": f"Salto detectado: {', '.join(map(str, metricas['furos'][:10]))}"
+            "descricao": f"Foram encontrados {len(metricas['furos'])} furos na sequência de notas.",
+            "lista": metricas['furos']  # 👈 passa TODOS
         })
 
     duplicadas = NotaFiscal.objects.filter(empresa=empresa) \
@@ -283,28 +285,45 @@ def dashboard_relatorios(request):
 
     return render(request, "fiscal/relatorios.html", context)
 
+from django.db.models import Count
+
 def verificar_alertas(empresa):
     alertas = []
-    
-    # 1. Busca duplicidade por chave de acesso
-    chaves_duplicadas = NotaFiscal.objects.filter(empresa=empresa)\
-        .values('chave')\
-        .annotate(qtd=Count('id'))\
+
+    # =========================
+    # 1. DUPLICIDADE DE CHAVE
+    # =========================
+    chaves_duplicadas = (
+        NotaFiscal.objects
+        .filter(empresa=empresa)
+        .values('chave')
+        .annotate(qtd=Count('id'))
         .filter(qtd__gt=1)
+    )
 
     if chaves_duplicadas.exists():
         total_duplicadas = chaves_duplicadas.count()
-        # Pegamos as 3 primeiras chaves para exemplificar no alerta
         exemplo_chaves = ", ".join([c['chave'][-10:] for c in chaves_duplicadas[:3]])
-        
+
         alertas.append({
             'tipo': 'Duplicidade de Chave',
             'numero': 'Crítico',
-            'descricao': f'Existem {total_duplicadas} chaves de acesso duplicadas. Exemplos (finais): {exemplo_chaves}...'
+            'descricao': f'Existem {total_duplicadas} chaves duplicadas. Ex: {exemplo_chaves}'
         })
-        
-    return alertas
 
+    # =========================
+    # 2. FUROS DE NUMERAÇÃO
+    # =========================
+    furos = identificar_furos(empresa, "saida")
+
+    if furos:
+        alertas.append({
+            "tipo": "Furo de Numeração",
+            "numero": "Alerta",
+            "descricao": f"Foram encontrados {len(furos)} furos na sequência de notas."
+        })
+
+    return alertas
 
 @login_required
 def exportar_excel(request):

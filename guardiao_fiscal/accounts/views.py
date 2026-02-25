@@ -25,6 +25,7 @@ def registro(request):
                     
                     # 4. Redireciona para o login em vez de listar_notas
                     return redirect('login') 
+                
             except Exception as e:
                 # Caso algo dê errado na transação, adicionamos um erro
                 messages.error(request, "Erro ao criar conta. Verifique os dados e tente novamente.")

@@ -299,46 +299,36 @@ def identificar_furos(empresa, tipo_nota):
     if not tipo_nota:
         return []
 
-    notas = NotaFiscal.objects.filter(
-        empresa=empresa,
-        tipo=tipo_nota,
-        autorizada=True
-    ).exclude(numero__isnull=True).exclude(numero="") \
-     .values("numero", "serie")
+    notas = (
+        NotaFiscal.objects.filter(
+            empresa=empresa,
+            tipo=tipo_nota,
+            autorizada=True
+        )
+        .exclude(numero__isnull=True)
+        .exclude(numero="")
+        .values_list("numero", flat=True)
+    )
 
-    series_map = {}
-
+    numeros = []
     for n in notas:
-        serie = n["serie"] or "1"
         try:
-            num = int(n["numero"])
+            numeros.append(int(n))
         except (ValueError, TypeError):
             continue
 
-        series_map.setdefault(serie, []).append(num)
+    if len(numeros) < 2:
+        return []
+
+    numeros.sort()
 
     inconsistencias = []
+    anterior = numeros[0]
 
-    for serie, numeros in series_map.items():
-        if len(numeros) < 2:
-            continue
-
-        numeros.sort()
-
-        anterior = numeros[0]
-
-        for atual in numeros[1:]:
-            if atual > anterior + 1:
-                for f in range(anterior + 1, atual):
-                    inconsistencias.append({
-                        "tipo": f"Furo de Sequência (Série {serie})",
-                        "numero": f,
-                        "descricao": f"A nota número {f} da série {serie} não foi encontrada no sistema."
-                    })
-
-                    if len(inconsistencias) >= 15:
-                        return inconsistencias
-
-            anterior = atual
+    for atual in numeros[1:]:
+        if atual > anterior + 1:
+            for f in range(anterior + 1, atual):
+                inconsistencias.append(f)
+        anterior = atual
 
     return inconsistencias
