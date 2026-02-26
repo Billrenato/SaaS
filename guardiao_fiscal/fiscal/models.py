@@ -32,12 +32,24 @@ class NotaFiscal(models.Model):
 class NotaFiscalCFOP(models.Model):
     empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE)
     nota = models.ForeignKey(NotaFiscal, on_delete=models.CASCADE, related_name="cfops")
-
+    cod_prod = models.CharField(max_length=255, blank=True, null=True)
+    cest = models.CharField(max_length=20, blank=True, null=True)
+    un = models.CharField(max_length=10)
     cfop = models.CharField(max_length=10)
     descricao = models.CharField(max_length=255, blank=True, null=True)
-
+    ncm = models.CharField(max_length=255, blank=True, null=True)
     valor = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    # ===== ICMS =====
+    icms_cst = models.CharField(max_length=10, blank=True, null=True)
+    icms_valor = models.DecimalField(max_digits=15, decimal_places=2, default=0)
 
+    # ===== PIS =====
+    pis_cst = models.CharField(max_length=10, blank=True, null=True)
+    pis_valor = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+
+    # ===== COFINS =====
+    cofins_cst = models.CharField(max_length=10, blank=True, null=True)
+    cofins_valor = models.DecimalField(max_digits=15, decimal_places=2, default=0)
     criado_em = models.DateTimeField(auto_now_add=True)
 
     class Meta:

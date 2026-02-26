@@ -9,6 +9,14 @@ from django.db.models import Sum, Count
 from django.db.models.functions import TruncMonth
 from .models import UploadLote, NotaFiscal
 from .services import processar_lote,identificar_furos
+from django.http import JsonResponse
+from django.db.models import Sum, Count
+from .models import NotaFiscal
+
+from django.shortcuts import get_object_or_404
+from django.http import JsonResponse
+from django.db.models import Sum, Count
+from .models import NotaFiscal
 
 @login_required
 def upload_xml(request):
@@ -355,15 +363,6 @@ def exportar_excel(request):
     return response
 
 
-from django.http import JsonResponse
-from django.db.models import Sum, Count
-from .models import NotaFiscal
-
-from django.http import JsonResponse
-from django.shortcuts import get_object_or_404
-from django.db.models import Sum, Count
-from .models import NotaFiscal
-
 def nota_detalhes(request, pk):
 
     nota = get_object_or_404(
@@ -386,18 +385,40 @@ def nota_detalhes(request, pk):
         for c in cfops
     ]
 
+    # 🔥 ITENS (PRODUTOS COM IMPOSTOS)
+    itens = list(
+        nota.cfops.values(
+            "cod_prod",
+            "descricao",
+            "ncm",
+            "cest",
+            "cfop",
+            "valor",
+            "icms_cst",
+            "icms_valor",
+            "pis_cst",
+            "pis_valor",
+            "cofins_cst",
+            "cofins_valor",
+        )
+    )
+
     return JsonResponse({
         "numero": nota.numero,
         "data": nota.data_emissao.strftime("%d/%m/%Y %H:%M"),
         "total": float(nota.valor_total),
         "chave": nota.chave,
-        # 🔥 IMPOSTOS
+
+        # 🔥 IMPOSTOS DA NOTA
         "icms": float(nota.valor_icms),
         "ipi": float(nota.valor_ipi),
         "pis": float(nota.valor_pis),
         "cofins": float(nota.valor_cofins),
         "tributos": float(nota.valor_tributos),
 
-        "resumo_cfop": resumo if resumo else []
-    })
+        # 🔥 CFOP
+        "resumo_cfop": resumo if resumo else [],
 
+        # 🔥 ITENS
+        "itens": itens
+    })

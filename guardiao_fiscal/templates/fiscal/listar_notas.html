@@ -289,7 +289,7 @@ async function abrirDetalhes(botao) {
         const response = await fetch(`/nota/${notaId}/detalhes/`);
         const data = await response.json();
 
-        const f = (v) => parseFloat(v || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2});
+        const f = (v) => parseFloat(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
 
         modalBody.innerHTML = `
             <div class="container-fluid">
@@ -311,9 +311,9 @@ async function abrirDetalhes(botao) {
                     <small class="text-muted d-block">Chave de Acesso</small>
                     <div class="input-group shadow-sm">
                         <input type="text" 
-                               class="form-control fw-bold text-center bg-light" 
-                               value="${data.chave || 'Não disponível'}" 
-                               readonly>
+                            class="form-control fw-bold text-center bg-light" 
+                            value="${data.chave || 'Não disponível'}" 
+                            readonly>
                         <button class="btn btn-outline-secondary" 
                                 onclick="navigator.clipboard.writeText('${data.chave || ''}')">
                             <i class="bi bi-clipboard"></i>
@@ -397,11 +397,68 @@ async function abrirDetalhes(botao) {
                     }
                 </div>
 
+                <!-- PRODUTOS -->
+                <h6 class="fw-bold mt-4 mb-2 small text-muted text-uppercase">
+                    <i class="bi bi-box-seam me-1"></i> Produtos e Impostos
+                </h6>
+
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered align-middle text-center small">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Produto</th>
+                                <th>NCM</th>
+                                <th>CEST</th>
+                                <th>CFOP</th>
+                                <th>Valor</th>
+                                <th>ICMS</th>
+                                <th>PIS</th>
+                                <th>COFINS</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${
+                                data.itens && data.itens.length > 0
+                                ? data.itens.map(item => `
+                                    <tr>
+                                        <td class="text-start">
+                                            <strong>${item.cod_prod}</strong><br>
+                                            <small class="text-muted">${item.descricao}</small>
+                                        </td>
+                                        <td>${item.ncm || '-'}</td>
+                                        <td>${item.cest || '-'}</td>
+                                        <td>${item.cfop}</td>
+                                        <td>R$ ${f(item.valor)}</td>
+                                        <td>
+                                            ${item.icms_cst || '-'}<br>
+                                            <span class="text-danger">R$ ${f(item.icms_valor)}</span>
+                                        </td>
+                                        <td>
+                                            ${item.pis_cst || '-'}<br>
+                                            <span class="text-danger">R$ ${f(item.pis_valor)}</span>
+                                        </td>
+                                        <td>
+                                            ${item.cofins_cst || '-'}<br>
+                                            <span class="text-danger">R$ ${f(item.cofins_valor)}</span>
+                                        </td>
+                                    </tr>
+                                `).join("")
+                                : `
+                                    <tr>
+                                        <td colspan="8" class="text-center text-muted">
+                                            Nenhum item encontrado
+                                        </td>
+                                    </tr>
+                                `
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
             </div>
         `;
-
-    } catch (error) {
-        modalBody.innerHTML = "<div class='text-danger'>Erro ao carregar detalhes</div>";
+    } catch (e) {
+        console.error(e);
     }
 }
 

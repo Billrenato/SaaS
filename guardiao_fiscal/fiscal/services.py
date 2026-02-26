@@ -243,15 +243,56 @@ def ler_xml(xml_bytes, empresa):
 
     for item in itens:
         prod = item.find("ns:prod", ns)
+        imposto = item.find("ns:imposto", ns)
+
         if prod is not None:
+            codprod = prod.find("ns:cProd", ns).text
+            un_med = prod.find("ns:uCom", ns).text
+            descri = prod.find("ns:xProd", ns).text
+            prod_cest = prod.findtext("ns:CEST", default=None, namespaces=ns)
+            prod_ncm = prod.find("ns:NCM", ns).text
             cfop_v = prod.find("ns:CFOP", ns).text
             v_prod = Decimal(prod.find("ns:vProd", ns).text or "0.00")
 
+            # ===== ICMS =====
+            icms_cst = None
+            icms_valor = Decimal("0.00")
+
+            icms = imposto.find("ns:ICMS", ns)
+            if icms is not None:
+                icms_tipo = list(icms)[0]  # ICMSSN102, ICMS00, etc
+                icms_cst = icms_tipo.findtext("ns:CSOSN", default=None, namespaces=ns) or \
+                        icms_tipo.findtext("ns:CST", default=None, namespaces=ns)
+                icms_valor = Decimal(icms_tipo.findtext("ns:vICMS", default="0.00", namespaces=ns))
+
+            # ===== PIS =====
+            pis = imposto.find("ns:PIS", ns)
+            pis_tipo = list(pis)[0] if pis is not None else None
+            pis_cst = pis_tipo.findtext("ns:CST", default=None, namespaces=ns) if pis_tipo else None
+            pis_valor = Decimal(pis_tipo.findtext("ns:vPIS", default="0.00", namespaces=ns)) if pis_tipo else Decimal("0.00")
+
+            # ===== COFINS =====
+            cofins = imposto.find("ns:COFINS", ns)
+            cofins_tipo = list(cofins)[0] if cofins is not None else None
+            cofins_cst = cofins_tipo.findtext("ns:CST", default=None, namespaces=ns) if cofins_tipo else None
+            cofins_valor = Decimal(cofins_tipo.findtext("ns:vCOFINS", default="0.00", namespaces=ns)) if cofins_tipo else Decimal("0.00")
+
             NotaFiscalCFOP.objects.create(
                 empresa=empresa,
+                cod_prod=codprod,
+                descricao=descri,
+                ncm=prod_ncm,
                 nota=nf,
                 cfop=cfop_v,
-                valor=v_prod
+                valor=v_prod,
+                un=un_med,
+
+                icms_cst=icms_cst,
+                icms_valor=icms_valor,
+                pis_cst=pis_cst,
+                pis_valor=pis_valor,
+                cofins_cst=cofins_cst,
+                cofins_valor=cofins_valor,
             )
 
     return "salva"
