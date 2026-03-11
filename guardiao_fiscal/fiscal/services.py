@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 def apenas_numeros(valor):
     return re.sub(r'\D', '', str(valor))
+
 def processar_lote(upload_lote):
 
     # 🔥 limpa erros antigos se reprocessar o mesmo lote
