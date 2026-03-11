@@ -4,6 +4,8 @@ python manage.py migrate
 
 python manage.py runserver
 
+python manage.py importar_api_xml   importação
+
 python manage.py createsuperuser
 
 
