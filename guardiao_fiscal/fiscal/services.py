@@ -79,12 +79,15 @@ def processar_lote(upload_lote):
                         status = ler_xml(xml_bytes, empresa)
 
                         # 🔥 extrair chave da NFe
-                        chave = "XML comprometido"
+                        chave = nome  # 👈 começa com nome do arquivo
+
                         try:
                             root = ET.fromstring(xml_bytes)
                             infNFe = root.find(".//{http://www.portalfiscal.inf.br/nfe}infNFe")
                             if infNFe is not None:
-                                chave = infNFe.attrib.get("Id", "").replace("NFe", "")
+                                chave_xml = infNFe.attrib.get("Id", "").replace("NFe", "")
+                                if chave_xml:
+                                    chave = chave_xml  # 👈 se conseguir, sobrescreve
                         except:
                             pass
 
@@ -363,7 +366,7 @@ def identificar_furos(empresa, tipo_nota, data_inicio=None, data_fim=None):
     if data_fim:
         qs = qs.filter(data_emissao__date__lte=data_fim)
 
-    notas = qs.values_list("numero", flat=True)
+    notas = qs.order_by("numero").values_list("numero", flat=True)
 
     numeros = []
     for n in notas:
@@ -372,18 +375,27 @@ def identificar_furos(empresa, tipo_nota, data_inicio=None, data_fim=None):
         except (ValueError, TypeError):
             continue
 
+    numeros = sorted(set(numeros))
+
     if len(numeros) < 2:
         return []
 
-    numeros.sort()
-
     inconsistencias = []
-    anterior = numeros[0]
+    anterior = numeros[0]  # 👈 começa do menor do banco (CORRETO)
+
+    SALTO_MAXIMO = 50  # 🔥 AJUSTE AQUI (regra de negócio)
 
     for atual in numeros[1:]:
-        if atual > anterior + 1:
-            for f in range(anterior + 1, atual):
-                inconsistencias.append(f)
+        diferenca = atual - anterior
+
+        if diferenca > 1:
+            if diferenca > SALTO_MAXIMO:
+                # 🚫 ignora salto absurdo (não é furo real)
+                anterior = atual
+                continue
+
+            inconsistencias.extend(range(anterior + 1, atual))
+
         anterior = atual
 
     return inconsistencias

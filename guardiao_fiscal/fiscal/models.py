@@ -11,7 +11,7 @@ class NotaFiscal(models.Model):
     ]
 
     empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE)
-    chave = models.CharField(max_length=44, unique=True)
+    chave = models.CharField(max_length=255, null=True, blank=True)
     numero = models.CharField(max_length=20)
     data_emissao = models.DateTimeField()
     autorizada = models.BooleanField(default=True)
@@ -79,7 +79,7 @@ class UploadErro(models.Model):
 
     lote = models.ForeignKey("UploadLote", on_delete=models.CASCADE, related_name="erros")
     tipo = models.CharField(max_length=30, choices=TIPOS)
-    chave = models.CharField(max_length=44)
+    chave = models.CharField(max_length=255, null=True, blank=True)
     criado_em = models.DateTimeField(auto_now_add=True)
 
     class Meta:
