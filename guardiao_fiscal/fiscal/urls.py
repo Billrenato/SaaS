@@ -26,5 +26,6 @@ urlpatterns = [
     path("nota/<int:pk>/detalhes/", nota_detalhes, name="nota_detalhes"),
     path("erros-lote/<int:lote_id>/", erros_lote, name="erros_lote"),
     path("historico-uploads/", historico_uploads, name="historico_uploads"),
+    path('exportar-excel/<str:tipo>/<str:mes>/', exportar_excel, name='exportar_excel'),
     
 ]

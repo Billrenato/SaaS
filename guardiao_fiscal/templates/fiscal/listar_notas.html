@@ -55,6 +55,8 @@
         </li>
     </ul>
 
+    
+
     <div class="tab-content border-0" id="mainTabContent">
         <div class="tab-pane fade show active" id="ultimas" role="tabpanel">
             <div class="card shadow-sm border-0 p-3">
@@ -88,6 +90,13 @@
                         <div class="tab-content shadow-sm bg-white rounded p-4 border">
                             {% for mes, dados in meses.items %}
                                 <div class="tab-pane fade {% if forloop.first %}show active{% endif %}" id="tab-{{ tipo }}-{{ forloop.counter }}">
+                                    <!-- BOTÃO EXPORTAR -->
+                                    <div class="d-flex justify-content-end mb-2">
+                                        <a href="{% url 'exportar_excel' tipo=tipo mes=mes|slugify %}" 
+                                        class="btn btn-success btn-sm shadow-sm">
+                                        <i class="bi bi-file-earmark-excel"></i> Exportar Excel
+                                        </a>
+                                    </div>
                                     
                                     {# VOLTANDO OS ÍCONES NOS QUADROS DE VALORES #}
                                     <div class="row g-3 mb-4">

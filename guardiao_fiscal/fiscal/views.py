@@ -17,6 +17,9 @@ from django.shortcuts import get_object_or_404
 from django.http import JsonResponse
 from django.db.models import Sum, Count
 from .models import NotaFiscal
+from django.http import HttpResponse
+from openpyxl import Workbook
+from .models import NotaFiscal
 
 @login_required
 def upload_xml(request):
@@ -333,33 +336,80 @@ def verificar_alertas(empresa):
 
     return alertas
 
+import urllib.parse
+
 @login_required
-def exportar_excel(request):
-    empresa = request.user.empresa
-    notas = NotaFiscal.objects.filter(empresa=empresa)
+def exportar_excel(request, tipo, mes):
+    """
+    Exporta notas fiscais por tipo e mês para Excel
+    URL esperada: /exportar-excel/<tipo>/<mes>/
+    Ex: /exportar-excel/nfce/february-2026/
+    """
 
-    # REPETIR OS FILTROS DA DASHBOARD
-    tipo = request.GET.get('tipo')
-    search = request.GET.get('search')
-    ano = request.GET.get('ano')
+    # 🔹 Trata o mês vindo da URL (ex: february-2026)
+    mes = mes.replace('-', ' ')   # february 2026
+    mes = mes.title()             # February 2026
 
-    if tipo: notas = notas.filter(tipo=tipo)
-    if ano: notas = notas.filter(data_emissao__year=ano)
-    if search: notas = notas.filter(Q(chave__icontains=search) | Q(numero__icontains=search))
+    # 🔹 Separa mês e ano
+    try:
+        nome_mes, ano = mes.split()
+        ano = int(ano)
+    except Exception:
+        return HttpResponse("Formato de mês inválido", status=400)
 
-    # Selecionar campos para o Excel
-    dados = notas.values('numero', 'chave', 'data_emissao', 'valor_total', 'tipo')
-    df = pd.DataFrame(list(dados))
-    
-    if df.empty:
-        messages.warning(request, "Não há dados para exportar com esses filtros.")
-        return redirect('dashboard_relatorios')
+    # 🔹 Mapeamento mês → número
+    meses_map = {
+        "January": 1, "February": 2, "March": 3,
+        "April": 4, "May": 5, "June": 6,
+        "July": 7, "August": 8, "September": 9,
+        "October": 10, "November": 11, "December": 12
+    }
 
-    # Configurar Response
-    response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-    response['Content-Disposition'] = f'attachment; filename=relatorio_{datetime.date.today()}.xlsx'
-    
-    df.to_excel(response, index=False, engine='openpyxl')
+    mes_num = meses_map.get(nome_mes)
+
+    if not mes_num:
+        return HttpResponse("Mês inválido", status=400)
+
+    # 🔹 Filtra notas corretamente
+    notas = NotaFiscal.objects.filter(
+        tipo=tipo,
+        data_emissao__month=mes_num,
+        data_emissao__year=ano,
+        empresa=request.user.empresa  # 🔥 IMPORTANTE (segurança multi-tenant)
+    )
+
+    # 🔹 Cria o Excel
+    wb = Workbook()
+    ws = wb.active
+    ws.title = f"{tipo.upper()} {nome_mes}-{ano}"
+
+    # 🔹 Cabeçalho
+    ws.append([
+        "Número",
+        "Data",
+        "CNPJ",
+        "Valor Total"
+    ])
+
+    # 🔹 Dados
+    for n in notas:
+        ws.append([
+            n.numero,
+            n.data_emissao.strftime("%d/%m/%Y") if n.data_emissao else "",
+            getattr(n, "cnpj_emitente", ""),
+            float(n.valor_total or 0)
+        ])
+
+    # 🔹 Resposta HTTP (download)
+    response = HttpResponse(
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+
+    response['Content-Disposition'] = (
+        f'attachment; filename="notas_{tipo}_{ano}_{mes_num}.xlsx"'
+    )
+
+    wb.save(response)
     return response
 
 
